@@ -75,6 +75,11 @@ React will run on `http://localhost:5173` (or next available port)
 
 ## Testing the Application
 
+### 0. Easy Launch
+Run `install.sh` to install any missing dependencies and apply Django changes.
+
+Run `launchdev.sh` to launch Django server in background and run React server in foreground
+
 ### 1. Access the Frontend
 
 Open browser to `http://localhost:5173`
