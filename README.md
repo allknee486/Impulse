@@ -11,17 +11,17 @@
 
 ## Backend Setup (Django)
 
-### Step 1: Navigate to Backend and Create Virtual Environment
+### Step 1:  Create Virtual Environment and Navigate to Backend
 
 ```bash
-cd backend
-python -m venv venv
+python -m venv .venv
 
 # On Windows
-venv\Scripts\activate
-
+.venv\Scripts\activate
 # On macOS/Linux
-source venv/bin/activate
+source .venv/bin/activate
+
+cd backend
 ```
 
 ### Step 2: Install Dependencies
