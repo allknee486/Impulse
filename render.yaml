@@ -9,9 +9,8 @@ services:
     plan: free
     name: Impulse
     runtime: python
-    rootDir: './backend'
     buildCommand: './build.sh'
-    startCommand: 'python -m gunicorn Impulse.asgi:application -k uvicorn.workers.UvicornWorker'
+    startCommand: 'cd back && python -m gunicorn Impulse.asgi:application -k uvicorn.workers.UvicornWorker'
     envVars:
       - key: DATABASE_URL
         fromDatabase:
