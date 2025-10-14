@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom base styling */
+body {
+  @apply bg-impulse-gray-light text-impulse-gray-dark font-sans;
+}
+
+/* Headings */
+h1, h2, h3 {
+  @apply font-heading text-impulse-gray-dark;
+}
+
+/* Buttons */
+.btn-primary {
+  @apply bg-impulse-indigo text-white font-semibold px-4 py-2 rounded-lg
+         hover:bg-impulse-indigo-dark transition;
+}
+
+.btn-danger {
+  @apply bg-impulse-red text-white font-semibold px-4 py-2 rounded-lg
+         hover:bg-impulse-red-dark transition;
+}
+
+/* Cards */
+.card {
+  @apply bg-white shadow-card rounded-xl p-6;
+}
+
+/* Form Inputs */
+.input {
+  @apply w-full border border-gray-300 rounded-lg px-4 py-2
+         focus:outline-none focus:ring-2 focus:ring-impulse-indigo;
+}
+
+.input-error {
+  @apply border-impulse-red;
+}
+
+.alert-error {
+  @apply bg-red-50 border border-impulse-red-light text-impulse-red-dark
+         px-4 py-3 rounded-lg;
+}
