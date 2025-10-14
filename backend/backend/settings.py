@@ -32,9 +32,14 @@ SECRET_KEY = 'django-insecure-od-u+64i)2csr#5i(v*aaieyjgwt9eyt(wjd3o)#8t!ndaufwd
 
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False') == True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
+# Add Render.com URL to ALLOWED_HOSTS in production
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 # Application definition
 
@@ -173,8 +178,8 @@ CORS_ALLOWED_ORIGINS = [
 
 # Once production is set up, replace with custom domain
 if not DEBUG:
-    CORS_ALLOWED_ORIGINS = [
-        "https://example.com",
-    ]
+    FRONTEND_URL = os.environ.get('FRONTEND_URL')
+    if FRONTEND_URL:
+        CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
 
 CORS_ALLOW_CREDENTIALS = True
