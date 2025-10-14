@@ -4,7 +4,7 @@
 if [[ "$OSTYPE" == "msys" ]]; then
     .venv\Scripts\activate
 else
-    .venv/source/bin/activate
+    source .venv/bin/activate
 fi
 
 cd backend || exit
