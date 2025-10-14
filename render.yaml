@@ -10,7 +10,7 @@ services:
     name: Impulse
     runtime: python
     buildCommand: './build.sh'
-    startCommand: 'cd back && python -m gunicorn Impulse.asgi:application -k uvicorn.workers.UvicornWorker'
+    startCommand: 'cd backend && python -m gunicorn Impulse.asgi:application -k uvicorn.workers.UvicornWorker'
     envVars:
       - key: DATABASE_URL
         fromDatabase:
