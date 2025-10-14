@@ -1,7 +1,7 @@
 databases:
   - name: Impulse
     plan: free
-    databaseName: impulsedb
+    databaseName: backenddb
     user: mysite
 
 services:
@@ -10,11 +10,11 @@ services:
     name: mysite
     runtime: python
     buildCommand: './build.sh'
-    startCommand: 'python -m gunicorn Impulse.asgi:application -k uvicorn.workers.UvicornWorker'
+    startCommand: 'python -m gunicorn backend.asgi:application -k uvicorn.workers.UvicornWorker'
     envVars:
       - key: DATABASE_URL
         fromDatabase:
-          name: mysitedb
+          name: backenddb
           property: connectionString
       - key: SECRET_KEY
         generateValue: true
