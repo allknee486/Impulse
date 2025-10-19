@@ -1,145 +1,122 @@
+# models.py
+# This file defines the structure of your database tables
+
 from django.db import models
-from django.contrib.auth.models import User
-from django.core.validators import MinValueValidator
-from decimal import Decimal
+from django.contrib.auth.models import User  # Built-in Django user system
 
-class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    bio = models.TextField(blank=True)
+# A Category is like a folder for organizing expenses (Food, Transport, etc.)
+class Category(models.Model):
+    # CharField = text field with max length
+    name = models.CharField(max_length=100)
+    
+    # ForeignKey = connects this category to a specific user
+    # on_delete=models.CASCADE means: if user is deleted, delete their categories too
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    
+    # auto_now_add=True means Django automatically sets this when created
     created_at = models.DateTimeField(auto_now_add=True)
-    impulse_threshold = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=Decimal('50.00'),
-        help_text="Amount above which purchases are flagged as potential impulse buys"
-    )
-    currency = models.CharField(max_length=3, default='USD')
-    receive_alerts = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
+    
+    # This method controls how the category appears when printed
     def __str__(self):
-        return f"{self.user.username}'s profile"
+        return self.name
 
+
+# A Budget represents money set aside for a time period
 class Budget(models.Model):
-    """Budget for a specific time period"""
-    PERIOD_CHOICES = [
-        ('daily', 'Daily'),
-        ('weekly', 'Weekly'),
-        ('monthly', 'Monthly'),
-        ('yearly', 'Yearly'),
-        ('custom', 'Custom'),
-    ]
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='budgets')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=200)
-    amount = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))]
-    )
-    period = models.CharField(max_length=20, choices=PERIOD_CHOICES, default='monthly')
+    
+    # DecimalField is better than FloatField for money (more precise)
+    # max_digits=10 means up to 10 total digits
+    # decimal_places=2 means 2 digits after the decimal (cents)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # DateField stores just the date (not time)
     start_date = models.DateField()
     end_date = models.DateField()
-    category = models.ForeignKey(
-        Category, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True,
-        related_name='budgets'
-    )
+    
+    # BooleanField = True/False checkbox
     is_active = models.BooleanField(default=True)
-    alert_threshold = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        default=Decimal('80.00'),
-        help_text="Percentage threshold for budget alerts (e.g., 80 for 80%)"
-    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-start_date']
-
+    
     def __str__(self):
-        return f"{self.name} - ${self.amount} ({self.period})"
-
+        return f"{self.name} - ${self.amount}"
+    
+    # Example: my_budget.total_spent will run this code
     @property
     def total_spent(self):
-        """Calculate total spending for this budget"""
+        # Get all transactions linked to this budget
         transactions = self.transactions.all()
-        return sum(t.amount for t in transactions)
-
+        
+        # Add up all the amounts
+        total = 0
+        for transaction in transactions:
+            total += transaction.amount
+        return total
+    
     @property
     def remaining(self):
-        """Calculate remaining budget"""
+        # How much money is left in the budget
         return self.amount - self.total_spent
 
-    @property
-    def percentage_used(self):
-        """Calculate percentage of budget used"""
-        if self.amount == 0:
-            return 0
-        return (self.total_spent / self.amount) * 100
 
-    @property
-    def is_over_budget(self):
-        """Check if budget is exceeded"""
-        return self.total_spent > self.amount
-
-    @property
-    def is_near_limit(self):
-        """Check if budget is near alert threshold"""
-        return self.percentage_used >= self.alert_threshold
-
+# A Transaction is a single purchase or expense
 class Transaction(models.Model):
-    """Individual spending transaction"""
-    TRANSACTION_TYPES = [
-        ('expense', 'Expense'),
-        ('income', 'Income'),
-    ]
-
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='transactions')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    
+    # null=True, blank=True means this field is optional
+    # SET_NULL means if budget is deleted, just set this to None (don't delete transaction)
     budget = models.ForeignKey(
         Budget, 
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
-        related_name='transactions'
+        related_name='transactions'  # Lets us do: budget.transactions.all()
     )
+    
     category = models.ForeignKey(
         Category, 
         on_delete=models.SET_NULL, 
-        null=True,
-        related_name='transactions'
+        null=True, 
+        blank=True
     )
-    amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))]
-    )
+    
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.CharField(max_length=255)
+    
+    # TextField = unlimited length text (for longer notes)
     notes = models.TextField(blank=True)
-    transaction_type = models.CharField(
-        max_length=10,
-        choices=TRANSACTION_TYPES,
-        default='expense'
-    )
+    
+    # DateTimeField stores date AND time
     transaction_date = models.DateTimeField()
-    is_impulse = models.BooleanField(
-        default=False,
-        help_text="Flag for impulse purchases"
-    )
-    receipt_image = models.ImageField(
-        upload_to='receipts/%Y/%m/%d/',
-        blank=True,
-        null=True
-    )
+    
+    # Flag to mark impulse purchases
+    is_impulse = models.BooleanField(default=False)
+    
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-transaction_date']
-
+    
     def __str__(self):
-        return f"{self.description} - ${self.amount} ({self.transaction_date.date()})"
+        return f"{self.description} - ${self.amount}"
+
+
+# Simple model to track savings goals
+class SavingsGoal(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=200)
+    target_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    current_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    target_date = models.DateField(null=True, blank=True)
+    is_completed = models.BooleanField(default=False)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.name} - ${self.current_amount}/${self.target_amount}"
+    
+    @property
+    def percentage_complete(self):
+        # Calculate what % of the goal is complete
+        if self.target_amount == 0:
+            return 0
+        return (self.current_amount / self.target_amount) * 100
