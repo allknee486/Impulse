@@ -28,12 +28,15 @@ from django.utils import timezone
 from datetime import timedelta
 
 # Project serializers and models
+from .models import Budget, Category
 from .serializers import (
     UserRegistrationSerializer,
     UserLoginSerializer,
-    UserSerializer
+    UserSerializer,
+    BudgetSerializer,
+    CategorySerializer,
+    BudgetSummarySerializer,
 )
-from .models import Transaction
 
 
 class AuthViewSet(viewsets.ViewSet):
@@ -230,3 +233,172 @@ class DashboardViewSet(viewsets.ViewSet):
         }
 
         return Response(data, status=status.HTTP_200_OK)
+
+
+class BudgetViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Budget CRUD operations
+    """
+    serializer_class = BudgetSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Return budgets for current user"""
+        return Budget.objects.filter(user=self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        """Set user when creating budget"""
+        serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['get'])
+    def current(self, request):
+        """
+        Get the current active budget
+        GET /api/budgets/current/
+        """
+        today = timezone.now().date()
+        budget = Budget.objects.filter(
+            user=request.user,
+            is_active=True,
+            start_date__lte=today,
+            end_date__gte=today
+        ).first()
+
+        if not budget:
+            return Response(
+                {'detail': 'No active budget found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = self.get_serializer(budget)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def check_exists(self, request):
+        """
+        Check if user has any budgets
+        GET /api/budgets/check-exists/
+        """
+        has_budget = Budget.objects.filter(user=request.user).exists()
+        return Response({'hasBudget': has_budget})
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """
+        Get budget summary with spending overview
+        GET /api/budgets/summary/
+        """
+        # Get current active budget
+        today = timezone.now().date()
+        active_budget = Budget.objects.filter(
+            user=request.user,
+            is_active=True,
+            start_date__lte=today,
+            end_date__gte=today
+        ).first()
+
+        # Calculate totals
+        if active_budget:
+            total_income = active_budget.amount
+            total_spent = active_budget.total_spent
+            remaining = active_budget.remaining
+        else:
+            total_income = 0
+            total_spent = 0
+            remaining = 0
+
+        # Get categories
+        categories = Category.objects.filter(user=request.user)
+        category_data = []
+
+        for category in categories:
+            cat_transactions = category.transaction_set.filter(
+                transaction_date__gte=active_budget.start_date if active_budget else today,
+                transaction_date__lte=active_budget.end_date if active_budget else today
+            )
+            cat_spent = sum(t.amount for t in cat_transactions)
+
+            category_data.append({
+                'id': category.id,
+                'name': category.name,
+                'spent': float(cat_spent),
+                'transaction_count': cat_transactions.count()
+            })
+
+        summary_data = {
+            'total_income': float(total_income),
+            'total_allocated': float(total_income),  # For now, same as income
+            'total_spent': float(total_spent),
+            'remaining': float(remaining),
+            'categories': category_data,
+            'active_budget': BudgetSerializer(active_budget).data if active_budget else None
+        }
+
+        serializer = BudgetSummarySerializer(summary_data)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        """
+        Activate a specific budget (deactivate others)
+        POST /api/budgets/{id}/activate/
+        """
+        budget = self.get_object()
+
+        # Deactivate all other budgets
+        Budget.objects.filter(user=request.user).exclude(id=budget.id).update(is_active=False)
+
+        # Activate this budget
+        budget.is_active = True
+        budget.save()
+
+        serializer = self.get_serializer(budget)
+        return Response(serializer.data)
+
+
+class CategoryViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Category CRUD operations
+    """
+    serializer_class = CategorySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """Return categories for current user"""
+        return Category.objects.filter(user=self.request.user).order_by('name')
+
+    def perform_create(self, serializer):
+        """Set user when creating category"""
+        serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """
+        Create multiple categories at once
+        POST /api/categories/bulk-create/
+        Body: {
+            "categories": [
+                {"name": "Food"},
+                {"name": "Transport"},
+                ...
+            ]
+        }
+        """
+        categories_data = request.data.get('categories', [])
+
+        if not categories_data:
+            return Response(
+                {'error': 'No categories provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        created_categories = []
+        for cat_data in categories_data:
+            category, created = Category.objects.get_or_create(
+                user=request.user,
+                name=cat_data.get('name')
+            )
+            created_categories.append(category)
+
+        serializer = self.get_serializer(created_categories, many=True)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
