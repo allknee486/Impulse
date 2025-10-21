@@ -1,6 +1,9 @@
+from time import timezone
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
+from .models import Category, Budget, Transaction, SavingsGoal
+from decimal import Decimal
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -66,3 +69,106 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name']
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ['id', 'name', 'description', 'color', 'created_at']
+        read_only_fields = ['id', 'created_at']
+    
+    def validate_color(self, value):
+        if not value.startswith('#') or len(value) != 7:
+            raise serializers.ValidationError("Color must be a valid hex color code (e.g., #123456).")
+        return value
+    
+class BudgetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Budget
+        fields = ['id', 'user', 'name', 'amount', 'is_active', 'created_at', 'updated_at', 'monthly_limit', 'start_date', 'end_date']
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+    
+    def validate_monthly_limit(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Monthly limit must be greater than 0.")
+        return value
+
+    def validate_start_date(self, value):
+        if value < timezone.now().date():
+            raise serializers.ValidationError("Start date cannot be in the past.")
+        return value
+    
+    def validate_end_date(self, value):
+        if value < self.initial_data.get('start_date'):
+            raise serializers.ValidationError("End date cannot be before start date.")
+        return value
+    
+class TransactionSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    category_color = serializers.CharField(source='category.color', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+
+    class Meta:
+        model = Transaction
+        fields = ['id', 'amount', 'description', 'notes', 'transaction_date', 'is_impulse', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+    
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0.")
+        return value
+    
+    def validate_is_impulse(self, value):
+        if value not in [True, False]:
+            raise serializers.ValidationError("Is impulse must be a boolean value.")
+
+class TransactionCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Transaction
+        fields = ['amount', 'description', 'notes', 'transaction_date', 'is_impulse']
+        read_only_fields = ['user', 'created_at']
+    
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0.")
+        return value
+
+class SavingsGoalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavingsGoal
+        fields = ['id', 'name', 'target_amount', 'current_amount', 'target_date', 'is_completed', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+    
+    def validate_target_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Target amount must be greater than 0.")
+        return value
+    
+    def validate_current_amount(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Current amount cannot be negative.")
+        return value
+    
+    def validate_target_date(self, value):
+        if value < timezone.now().date():
+            raise serializers.ValidationError("Target date cannot be in the past.")
+        return value
+    
+    def validate(self, value):
+        current_amount = value.get('current_amount', Decimal('0.00'))
+        target_amount = value.get('target_amount', Decimal('0.00'))
+
+        # If updating an existing goal, use the current amount and target amount from the instance
+        if self.instance:
+            current_amount = value.get('current_amount', self.instance.current_amount)
+            target_amount = value.get('target_amount', self.instance.target_amount)
+
+        if current_amount > target_amount:
+            pass
+        return value
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['remaining_amount'] = instance.remaining_amount()
+        data['percentage_complete'] = instance.percentage_complete()
+        return data
+    
