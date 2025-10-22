@@ -8,7 +8,10 @@ export default function BudgetEdit() {
   const [saving, setSaving] = useState(false);
   const [budget, setBudget] = useState(null);
   const [categories, setCategories] = useState([]);
+  const [allocations, setAllocations] = useState({});  // Map of category_id -> allocated_amount
   const [errors, setErrors] = useState({});
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [bulkCategoryText, setBulkCategoryText] = useState('');
 
   useEffect(() => {
     fetchCurrentBudget();
@@ -16,20 +19,35 @@ export default function BudgetEdit() {
 
   const fetchCurrentBudget = async () => {
     try {
-      const [budgetResponse, categoriesResponse] = await Promise.all([
-        apiClient.get('/budgets/active/'),  // Use /budgets/active/ instead of /budgets/current/
-        apiClient.get('/categories/')
-      ]);
+      const budgetResponse = await apiClient.get('/budgets/active/');
 
       // Get first active budget from the list
       const activeBudgets = budgetResponse.data;
-      if (activeBudgets && activeBudgets.length > 0) {
-        setBudget(activeBudgets[0]);
-      } else {
-        setBudget(null);  // No active budget found
+      if (!activeBudgets || activeBudgets.length === 0) {
+        setBudget(null);
+        setLoading(false);
+        return;
       }
 
+      const activeBudget = activeBudgets[0];
+      setBudget(activeBudget);
+
+      // Fetch categories and allocations in parallel
+      const [categoriesResponse, allocationsResponse] = await Promise.all([
+        apiClient.get('/categories/'),
+        apiClient.get(`/budgets/${activeBudget.id}/allocations/`)
+      ]);
+
+      // Categories endpoint now returns array directly (pagination disabled)
       setCategories(categoriesResponse.data);
+
+      // Convert allocations array to a map for easier lookup
+      const allocationsMap = {};
+      allocationsResponse.data.forEach(alloc => {
+        allocationsMap[alloc.category] = alloc.allocated_amount;
+      });
+      setAllocations(allocationsMap);
+
     } catch (err) {
       console.error('Error fetching budget:', err);
       setErrors({ fetch: 'Failed to load budget' });
@@ -48,6 +66,7 @@ export default function BudgetEdit() {
     setErrors({});
 
     try {
+      // Save budget details
       await apiClient.put(`/budgets/${budget.id}/`, {
         name: budget.name,
         amount: parseFloat(budget.amount),
@@ -55,6 +74,20 @@ export default function BudgetEdit() {
         end_date: budget.end_date,
         is_active: budget.is_active
       });
+
+      // Save allocations
+      const allocationsArray = Object.entries(allocations)
+        .map(([categoryId, amount]) => ({
+          category: parseInt(categoryId),
+          allocated_amount: parseFloat(amount) || 0
+        }))
+        .filter(alloc => alloc.allocated_amount > 0); // Only save non-zero allocations
+
+      if (allocationsArray.length > 0) {
+        await apiClient.post(`/budgets/${budget.id}/update_allocations/`, {
+          allocations: allocationsArray
+        });
+      }
 
       navigate('/dashboard');
     } catch (err) {
@@ -65,6 +98,13 @@ export default function BudgetEdit() {
     }
   };
 
+  const handleAllocationChange = (categoryId, value) => {
+    setAllocations(prev => ({
+      ...prev,
+      [categoryId]: value
+    }));
+  };
+
   const handleCategoryAdd = async (categoryName) => {
     try {
       const response = await apiClient.post('/categories/', {
@@ -73,6 +113,47 @@ export default function BudgetEdit() {
       setCategories(prev => [...prev, response.data]);
     } catch (err) {
       console.error('Error adding category:', err);
+    }
+  };
+
+  const handleBulkCategoryAdd = async () => {
+    if (!bulkCategoryText.trim()) return;
+
+    try {
+      // Parse the text - split by newlines and filter empty lines
+      const categoryNames = bulkCategoryText
+        .split('\n')
+        .map(name => name.trim())
+        .filter(name => name.length > 0)
+        .map(name => ({ name }));
+
+      if (categoryNames.length === 0) {
+        setErrors({ bulk: 'Please enter at least one category name' });
+        return;
+      }
+
+      // Call bulk create endpoint
+      const response = await apiClient.post('/categories/bulk_create/', {
+        categories: categoryNames
+      });
+
+      // Add newly created categories to the list
+      if (response.data.created) {
+        setCategories(prev => [...prev, ...response.data.created]);
+      }
+
+      // Close modal and reset
+      setShowBulkAdd(false);
+      setBulkCategoryText('');
+      setErrors({});
+
+      // Show success message if there were any errors
+      if (response.data.errors && response.data.errors.length > 0) {
+        console.warn('Some categories had errors:', response.data.errors);
+      }
+    } catch (err) {
+      console.error('Error bulk adding categories:', err);
+      setErrors({ bulk: err.response?.data?.error || 'Failed to add categories' });
     }
   };
 
@@ -212,15 +293,23 @@ export default function BudgetEdit() {
             <h2 className="text-2xl font-semibold text-impulse-gray-dark">
               Categories
             </h2>
-            <button
-              onClick={() => {
-                const name = prompt('Enter new category name:');
-                if (name) handleCategoryAdd(name);
-              }}
-              className="text-impulse-indigo hover:text-impulse-indigo-dark font-semibold text-sm"
-            >
-              + Add Category
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const name = prompt('Enter new category name:');
+                  if (name) handleCategoryAdd(name);
+                }}
+                className="text-impulse-indigo hover:text-impulse-indigo-dark font-semibold text-sm"
+              >
+                + Add Category
+              </button>
+              <button
+                onClick={() => setShowBulkAdd(true)}
+                className="px-4 py-2 bg-impulse-indigo text-white rounded-lg hover:bg-impulse-indigo-dark font-semibold text-sm"
+              >
+                Bulk Add
+              </button>
+            </div>
           </div>
 
           {errors.category && (
@@ -232,9 +321,9 @@ export default function BudgetEdit() {
               categories.map((category) => (
                 <div
                   key={category.id}
-                  className="flex justify-between items-center p-3 border border-gray-200 rounded-lg hover:border-impulse-indigo transition"
+                  className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-impulse-indigo transition"
                 >
-                  <div>
+                  <div className="flex-1">
                     <p className="font-semibold text-impulse-gray-dark">
                       {category.name}
                     </p>
@@ -242,9 +331,28 @@ export default function BudgetEdit() {
                       Created {new Date(category.created_at).toLocaleDateString()}
                     </p>
                   </div>
+                  <div className="w-40">
+                    <label className="block text-xs text-impulse-gray mb-1">
+                      Allocated
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-impulse-gray text-sm">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={allocations[category.id] || ''}
+                        onChange={(e) => handleAllocationChange(category.id, e.target.value)}
+                        className="input pl-7 text-sm"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
                   <button
                     onClick={() => handleCategoryDelete(category.id)}
-                    className="text-impulse-red hover:text-impulse-red-dark transition"
+                    className="text-impulse-red hover:text-impulse-red-dark transition p-2"
                   >
                     Delete
                   </button>
@@ -256,6 +364,34 @@ export default function BudgetEdit() {
               </p>
             )}
           </div>
+
+          {/* Show total allocated */}
+          {categories.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold text-impulse-gray-dark">Total Allocated:</span>
+                <span className="text-xl font-bold text-impulse-indigo">
+                  ${Object.values(allocations).reduce((sum, val) => sum + (parseFloat(val) || 0), 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center mt-2">
+                <span className="text-sm text-impulse-gray">Budget Amount:</span>
+                <span className="text-sm font-semibold">
+                  ${parseFloat(budget?.amount || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-sm text-impulse-gray">Unallocated:</span>
+                <span className={`text-sm font-semibold ${
+                  (parseFloat(budget?.amount || 0) - Object.values(allocations).reduce((sum, val) => sum + (parseFloat(val) || 0), 0)) < 0
+                    ? 'text-impulse-red-dark'
+                    : 'text-green-600'
+                }`}>
+                  ${(parseFloat(budget?.amount || 0) - Object.values(allocations).reduce((sum, val) => sum + (parseFloat(val) || 0), 0)).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Actions */}
@@ -275,6 +411,52 @@ export default function BudgetEdit() {
           </button>
         </div>
       </main>
+
+      {/* Bulk Add Modal */}
+      {showBulkAdd && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-xl shadow-card p-6 w-full max-w-md">
+            <h3 className="text-xl font-semibold text-impulse-gray-dark mb-4">
+              Bulk Add Categories
+            </h3>
+
+            <p className="text-sm text-impulse-gray mb-4">
+              Enter one category name per line. Duplicate categories will be skipped automatically.
+            </p>
+
+            {errors.bulk && (
+              <div className="alert-error mb-4">{errors.bulk}</div>
+            )}
+
+            <textarea
+              value={bulkCategoryText}
+              onChange={(e) => setBulkCategoryText(e.target.value)}
+              className="input min-h-40 resize-y"
+              placeholder="Food & Groceries&#10;Transportation&#10;Entertainment&#10;Healthcare"
+              rows={8}
+            />
+
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => {
+                  setShowBulkAdd(false);
+                  setBulkCategoryText('');
+                  setErrors({});
+                }}
+                className="flex-1 px-6 py-2 border-2 border-gray-300 text-impulse-gray-dark rounded-lg hover:bg-gray-50 transition font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkCategoryAdd}
+                className="flex-1 btn-primary py-2"
+              >
+                Add Categories
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

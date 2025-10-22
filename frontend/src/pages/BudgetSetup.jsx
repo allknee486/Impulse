@@ -109,7 +109,7 @@ export default function BudgetSetup() {
     setErrors({});
 
     try {
-      // Create budget without categories (backend doesn't support category allocations in budget creation)
+      // Create budget
       const budgetResponse = await apiClient.post('/budgets/', {
         name: budgetData.name,
         amount: parseFloat(budgetData.amount),
@@ -118,14 +118,39 @@ export default function BudgetSetup() {
         is_active: true
       });
 
-      // Create categories individually (no bulk-create endpoint exists)
-      const categoryPromises = budgetData.categories
-        .filter(cat => cat.name.trim())
-        .map(cat => apiClient.post('/categories/', {
-          name: cat.name
-        }));
+      const budgetId = budgetResponse.data.id;
 
-      await Promise.all(categoryPromises);
+      // Bulk create categories using the new endpoint
+      const categoriesToCreate = budgetData.categories
+        .filter(cat => cat.name.trim())
+        .map(cat => ({ name: cat.name }));
+
+      let createdCategories = [];
+      if (categoriesToCreate.length > 0) {
+        const categoryResponse = await apiClient.post('/categories/bulk_create/', {
+          categories: categoriesToCreate
+        });
+        createdCategories = categoryResponse.data.created || [];
+      }
+
+      // Create allocations for categories that have amounts
+      const allocations = budgetData.categories
+        .filter(cat => cat.name.trim() && cat.allocated)
+        .map((cat, index) => {
+          // Find the matching created category
+          const createdCat = createdCategories.find(c => c.name === cat.name);
+          return {
+            category: createdCat?.id,
+            allocated_amount: parseFloat(cat.allocated)
+          };
+        })
+        .filter(alloc => alloc.category); // Only include if we found the category ID
+
+      if (allocations.length > 0) {
+        await apiClient.post(`/budgets/${budgetId}/update_allocations/`, {
+          allocations
+        });
+      }
 
       navigate('/dashboard');
     } catch (error) {

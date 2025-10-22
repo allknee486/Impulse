@@ -43,8 +43,9 @@ from .serializers import (
     TransactionSerializer,
     TransactionCreateSerializer,
     SavingsGoalSerializer,
+    BudgetCategoryAllocationSerializer,
 )
-from .models import Category, Budget, Transaction, SavingsGoal
+from .models import Category, Budget, Transaction, SavingsGoal, BudgetCategoryAllocation
 
 
 class AuthViewSet(viewsets.ViewSet):
@@ -250,6 +251,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     Endpoints:
     - GET /api/categories/ - List all categories for current user
     - POST /api/categories/ - Create new category
+    - POST /api/categories/bulk_create/ - Bulk create multiple categories
     - GET /api/categories/{id}/ - Get specific category
     - PUT /api/categories/{id}/ - Update category
     - PATCH /api/categories/{id}/ - Partial update
@@ -258,6 +260,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     """
     serializer_class = CategorySerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None  # Disable pagination for categories
 
     def get_queryset(self):
         """Return only categories belonging to the logged-in user"""
@@ -266,6 +269,84 @@ class CategoryViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Automatically set the user when creating a category"""
         serializer.save(user=self.request.user)
+
+    @action(detail=False, methods=['post'])
+    def bulk_create(self, request):
+        """
+        Bulk create multiple categories at once
+        POST /api/categories/bulk_create/
+
+        Body: { "categories": [{"name": "Food"}, {"name": "Transport"}] }
+        Returns: List of created categories
+        """
+        categories_data = request.data.get('categories', [])
+
+        if not isinstance(categories_data, list):
+            return Response(
+                {'error': 'categories must be a list'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not categories_data:
+            return Response(
+                {'error': 'categories list cannot be empty'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        created_categories = []
+        errors = []
+
+        for idx, category_data in enumerate(categories_data):
+            # Validate that each item has a name
+            if not isinstance(category_data, dict):
+                errors.append({
+                    'index': idx,
+                    'error': 'Each category must be an object with a name field'
+                })
+                continue
+
+            name = category_data.get('name', '').strip()
+            if not name:
+                errors.append({
+                    'index': idx,
+                    'error': 'Category name is required'
+                })
+                continue
+
+            # Check if category with this name already exists for this user
+            existing = Category.objects.filter(user=request.user, name=name).first()
+            if existing:
+                # Return existing category instead of creating duplicate
+                created_categories.append(existing)
+                continue
+
+            # Create the category
+            try:
+                category = Category.objects.create(
+                    user=request.user,
+                    name=name
+                )
+                created_categories.append(category)
+            except Exception as e:
+                errors.append({
+                    'index': idx,
+                    'name': name,
+                    'error': str(e)
+                })
+
+        # Serialize the created categories
+        serializer = self.get_serializer(created_categories, many=True)
+
+        response_data = {
+            'created': serializer.data,
+            'created_count': len(created_categories),
+            'errors': errors
+        }
+
+        # Return 207 Multi-Status if there were partial errors, 201 if all succeeded
+        response_status = status.HTTP_207_MULTI_STATUS if errors else status.HTTP_201_CREATED
+
+        return Response(response_data, status=response_status)
 
     @action(detail=False, methods=['get'])
     def statistics(self, request):
@@ -430,6 +511,95 @@ class BudgetViewSet(viewsets.ModelViewSet):
         )
         serializer = TransactionSerializer(transactions, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get'])
+    def allocations(self, request, pk=None):
+        """
+        Get all category allocations for a specific budget
+        GET /api/budgets/{id}/allocations/
+        """
+        budget = self.get_object()
+        allocations = BudgetCategoryAllocation.objects.filter(budget=budget)
+        serializer = BudgetCategoryAllocationSerializer(allocations, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def update_allocations(self, request, pk=None):
+        """
+        Bulk update or create category allocations for a budget
+        POST /api/budgets/{id}/update_allocations/
+
+        Body: {
+            "allocations": [
+                {"category": 1, "allocated_amount": 500.00},
+                {"category": 2, "allocated_amount": 300.00}
+            ]
+        }
+        """
+        budget = self.get_object()
+        allocations_data = request.data.get('allocations', [])
+
+        if not isinstance(allocations_data, list):
+            return Response(
+                {'error': 'allocations must be a list'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        updated_allocations = []
+        errors = []
+
+        for idx, alloc_data in enumerate(allocations_data):
+            category_id = alloc_data.get('category')
+            allocated_amount = alloc_data.get('allocated_amount')
+
+            if not category_id:
+                errors.append({
+                    'index': idx,
+                    'error': 'category is required'
+                })
+                continue
+
+            if allocated_amount is None:
+                errors.append({
+                    'index': idx,
+                    'error': 'allocated_amount is required'
+                })
+                continue
+
+            try:
+                # Verify category belongs to user
+                category = Category.objects.get(id=category_id, user=request.user)
+
+                # Update or create allocation
+                allocation, created = BudgetCategoryAllocation.objects.update_or_create(
+                    budget=budget,
+                    category=category,
+                    defaults={'allocated_amount': Decimal(str(allocated_amount))}
+                )
+                updated_allocations.append(allocation)
+
+            except Category.DoesNotExist:
+                errors.append({
+                    'index': idx,
+                    'category_id': category_id,
+                    'error': 'Category not found or does not belong to user'
+                })
+            except Exception as e:
+                errors.append({
+                    'index': idx,
+                    'error': str(e)
+                })
+
+        serializer = BudgetCategoryAllocationSerializer(updated_allocations, many=True)
+
+        response_data = {
+            'allocations': serializer.data,
+            'updated_count': len(updated_allocations),
+            'errors': errors
+        }
+
+        response_status = status.HTTP_207_MULTI_STATUS if errors else status.HTTP_200_OK
+        return Response(response_data, status=response_status)
 
 
 class TransactionViewSet(viewsets.ModelViewSet):

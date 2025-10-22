@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.utils import timezone
-from .models import Category, Budget, Transaction, SavingsGoal
+from .models import Category, Budget, Transaction, SavingsGoal, BudgetCategoryAllocation
 from decimal import Decimal
 
 
@@ -170,3 +170,37 @@ class SavingsGoalSerializer(serializers.ModelSerializer):
         data['remaining_amount'] = instance.remaining_amount()
         data['percentage_complete'] = instance.percentage_complete
         return data
+
+
+class BudgetCategoryAllocationSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    spent_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True
+    )
+    remaining_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        read_only=True
+    )
+
+    class Meta:
+        model = BudgetCategoryAllocation
+        fields = [
+            'id',
+            'budget',
+            'category',
+            'category_name',
+            'allocated_amount',
+            'spent_amount',
+            'remaining_amount',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_allocated_amount(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Allocated amount cannot be negative.")
+        return value
