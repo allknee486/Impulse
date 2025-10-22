@@ -100,6 +100,44 @@ class Transaction(models.Model):
         return f"{self.description} - ${self.amount}"
 
 
+# Track how much money is allocated to each category within a budget
+class BudgetCategoryAllocation(models.Model):
+    budget = models.ForeignKey(
+        Budget,
+        on_delete=models.CASCADE,
+        related_name='category_allocations'
+    )
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE
+    )
+    allocated_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # Ensure each category only appears once per budget
+        unique_together = ['budget', 'category']
+
+    def __str__(self):
+        return f"{self.budget.name} - {self.category.name}: ${self.allocated_amount}"
+
+    @property
+    def spent_amount(self):
+        """Calculate how much has been spent in this category for this budget"""
+        from django.db.models import Sum
+        total = Transaction.objects.filter(
+            budget=self.budget,
+            category=self.category
+        ).aggregate(Sum('amount'))['amount__sum']
+        return total or 0
+
+    @property
+    def remaining_amount(self):
+        """Calculate remaining allocation for this category"""
+        return self.allocated_amount - self.spent_amount
+
+
 # Simple model to track savings goals
 class SavingsGoal(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -108,15 +146,19 @@ class SavingsGoal(models.Model):
     current_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     target_date = models.DateField(null=True, blank=True)
     is_completed = models.BooleanField(default=False)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     def __str__(self):
         return f"{self.name} - ${self.current_amount}/${self.target_amount}"
-    
+
     @property
     def percentage_complete(self):
         # Calculate what % of the goal is complete
         if self.target_amount == 0:
             return 0
         return (self.current_amount / self.target_amount) * 100
+
+    def remaining_amount(self):
+        """Calculate remaining amount needed to reach goal"""
+        return self.target_amount - self.current_amount
