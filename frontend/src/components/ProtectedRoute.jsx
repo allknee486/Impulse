@@ -20,11 +20,5 @@ export default function ProtectedRoute({ children, requiresBudget = false }) {
     return <Navigate to="/login" replace />;
   }
 
-  // If user is authenticated but doesn't have a budget, redirect to setup
-  // EXCEPT if they're already on the budget setup page
-  if (isAuthenticated && !hasBudget && !location.pathname.includes('/budget/setup')) {
-    return <Navigate to="/budget/setup" replace />;
-  }
-
   return children;
 }

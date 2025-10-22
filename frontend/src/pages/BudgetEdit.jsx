@@ -17,11 +17,18 @@ export default function BudgetEdit() {
   const fetchCurrentBudget = async () => {
     try {
       const [budgetResponse, categoriesResponse] = await Promise.all([
-        apiClient.get('/budgets/current/'),
+        apiClient.get('/budgets/active/'),  // Use /budgets/active/ instead of /budgets/current/
         apiClient.get('/categories/')
       ]);
 
-      setBudget(budgetResponse.data);
+      // Get first active budget from the list
+      const activeBudgets = budgetResponse.data;
+      if (activeBudgets && activeBudgets.length > 0) {
+        setBudget(activeBudgets[0]);
+      } else {
+        setBudget(null);  // No active budget found
+      }
+
       setCategories(categoriesResponse.data);
     } catch (err) {
       console.error('Error fetching budget:', err);

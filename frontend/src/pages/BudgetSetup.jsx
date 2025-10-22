@@ -109,27 +109,23 @@ export default function BudgetSetup() {
     setErrors({});
 
     try {
-      // Create budget
+      // Create budget without categories (backend doesn't support category allocations in budget creation)
       const budgetResponse = await apiClient.post('/budgets/', {
         name: budgetData.name,
         amount: parseFloat(budgetData.amount),
         start_date: budgetData.startDate,
         end_date: budgetData.endDate,
-        is_active: true,
-        categories: budgetData.categories
-          .filter(cat => cat.name.trim() && cat.allocated)
-          .map(cat => ({
-            category_name: cat.name,
-            allocated_amount: parseFloat(cat.allocated)
-          }))
+        is_active: true
       });
 
-      // Create categories
-      await apiClient.post('/categories/bulk-create/', {
-        categories: budgetData.categories
-          .filter(cat => cat.name.trim())
-          .map(cat => ({ name: cat.name }))
-      });
+      // Create categories individually (no bulk-create endpoint exists)
+      const categoryPromises = budgetData.categories
+        .filter(cat => cat.name.trim())
+        .map(cat => apiClient.post('/categories/', {
+          name: cat.name
+        }));
+
+      await Promise.all(categoryPromises);
 
       navigate('/dashboard');
     } catch (error) {

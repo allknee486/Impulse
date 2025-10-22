@@ -1,7 +1,9 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
-from .models import Budget, Category
+from django.utils import timezone
+from .models import Category, Budget, Transaction, SavingsGoal
+from decimal import Decimal
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -68,122 +70,103 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name']
 
-
 class CategorySerializer(serializers.ModelSerializer):
-    spent = serializers.SerializerMethodField()
-    remaining = serializers.SerializerMethodField()
-
     class Meta:
         model = Category
-        fields = ['id', 'name', 'user', 'created_at', 'spent', 'remaining']
-        read_only_fields = ['user', 'created_at']
-
-    def get_spent(self, obj):
-        """Calculate total spent in this category"""
-        transactions = obj.transaction_set.all()
-        return sum(t.amount for t in transactions)
-
-    def get_remaining(self, obj):
-        """Calculate remaining amount in category"""
-        # This is a placeholder - will be updated when we add category allocations
-        return 0
-
-
-class BudgetCategorySerializer(serializers.Serializer):
-    """Serializer for category allocation within a budget"""
-    category_name = serializers.CharField(max_length=100)
-    allocated_amount = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
-
+        fields = ['id', 'name', 'created_at']
+        read_only_fields = ['id', 'created_at']
 
 class BudgetSerializer(serializers.ModelSerializer):
-    categories = BudgetCategorySerializer(many=True, write_only=True, required=False)
-    total_spent = serializers.SerializerMethodField()
-    remaining = serializers.SerializerMethodField()
-    category_allocations = serializers.SerializerMethodField()
-
     class Meta:
         model = Budget
-        fields = [
-            'id', 'user', 'name', 'amount', 'start_date', 'end_date',
-            'is_active', 'created_at', 'total_spent', 'remaining',
-            'categories', 'category_allocations'
-        ]
-        read_only_fields = ['user', 'created_at', 'total_spent', 'remaining']
+        fields = ['id', 'user', 'name', 'amount', 'is_active', 'created_at', 'start_date', 'end_date']
+        read_only_fields = ['id', 'user', 'created_at']
 
-    def get_total_spent(self, obj):
-        """Calculate total spent from this budget"""
-        return obj.total_spent
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0.")
+        return value
 
-    def get_remaining(self, obj):
-        """Calculate remaining budget"""
-        return obj.remaining
+    def validate_start_date(self, value):
+        if value < timezone.now().date():
+            raise serializers.ValidationError("Start date cannot be in the past.")
+        return value
 
-    def get_category_allocations(self, obj):
-        """Get all categories with their allocations"""
-        # For now, return basic category info
-        # Will be enhanced when we add proper category allocations
-        categories = Category.objects.filter(user=obj.user)
-        return [{'id': c.id, 'name': c.name} for c in categories]
+    def validate_end_date(self, value):
+        start_date = self.initial_data.get('start_date')
+        # Convert string to date if needed
+        if isinstance(start_date, str):
+            from datetime import datetime
+            start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        if start_date and value < start_date:
+            raise serializers.ValidationError("End date cannot be before start date.")
+        return value
 
-    def validate(self, data):
-        """Validate budget data"""
-        # Ensure end_date is after start_date
-        if 'start_date' in data and 'end_date' in data:
-            if data['end_date'] < data['start_date']:
-                raise serializers.ValidationError({
-                    'end_date': 'End date must be after start date'
-                })
+class TransactionSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
 
-        # Validate total category allocations don't exceed budget amount
-        categories = data.get('categories', [])
-        if categories:
-            total_allocated = sum(c['allocated_amount'] for c in categories)
-            if total_allocated > data.get('amount', 0):
-                raise serializers.ValidationError({
-                    'categories': f'Total allocated (${total_allocated}) exceeds budget amount (${data["amount"]})'
-                })
+    class Meta:
+        model = Transaction
+        fields = ['id', 'amount', 'description', 'notes', 'transaction_date', 'is_impulse', 'created_at', 'category_name', 'username']
+        read_only_fields = ['id', 'user', 'created_at', 'category_name', 'username']
 
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0.")
+        return value
+
+    def validate_is_impulse(self, value):
+        if value not in [True, False]:
+            raise serializers.ValidationError("Is impulse must be a boolean value.")
+
+class TransactionCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Transaction
+        fields = ['amount', 'description', 'notes', 'transaction_date', 'is_impulse']
+        read_only_fields = ['user', 'created_at']
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Amount must be greater than 0.")
+        return value
+
+class SavingsGoalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavingsGoal
+        fields = ['id', 'name', 'target_amount', 'current_amount', 'target_date', 'is_completed', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+
+    def validate_target_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Target amount must be greater than 0.")
+        return value
+
+    def validate_current_amount(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Current amount cannot be negative.")
+        return value
+
+    def validate_target_date(self, value):
+        if value < timezone.now().date():
+            raise serializers.ValidationError("Target date cannot be in the past.")
+        return value
+
+    def validate(self, value):
+        current_amount = value.get('current_amount', Decimal('0.00'))
+        target_amount = value.get('target_amount', Decimal('0.00'))
+
+        # If updating an existing goal, use the current amount and target amount from the instance
+        if self.instance:
+            current_amount = value.get('current_amount', self.instance.current_amount)
+            target_amount = value.get('target_amount', self.instance.target_amount)
+
+        if current_amount > target_amount:
+            pass
+        return value
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['remaining_amount'] = instance.remaining_amount()
+        data['percentage_complete'] = instance.percentage_complete
         return data
-
-    def create(self, validated_data):
-        """Create budget and associated categories"""
-        categories_data = validated_data.pop('categories', [])
-        budget = Budget.objects.create(**validated_data)
-
-        # Create categories if provided
-        for category_data in categories_data:
-            Category.objects.get_or_create(
-                user=budget.user,
-                name=category_data['category_name']
-            )
-
-        return budget
-
-    def update(self, instance, validated_data):
-        """Update budget"""
-        categories_data = validated_data.pop('categories', None)
-
-        # Update budget fields
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        # Update categories if provided
-        if categories_data is not None:
-            for category_data in categories_data:
-                Category.objects.get_or_create(
-                    user=instance.user,
-                    name=category_data['category_name']
-                )
-
-        return instance
-
-
-class BudgetSummarySerializer(serializers.Serializer):
-    """Serializer for budget summary/overview"""
-    total_income = serializers.DecimalField(max_digits=10, decimal_places=2)
-    total_allocated = serializers.DecimalField(max_digits=10, decimal_places=2)
-    total_spent = serializers.DecimalField(max_digits=10, decimal_places=2)
-    remaining = serializers.DecimalField(max_digits=10, decimal_places=2)
-    categories = serializers.ListField()
-    active_budget = BudgetSerializer(allow_null=True)
