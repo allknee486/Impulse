@@ -88,7 +88,8 @@ class BudgetSerializer(serializers.ModelSerializer):
         return value
 
     def validate_start_date(self, value):
-        if value < timezone.now().date():
+        # Only validate start_date for new budgets, not when updating existing ones
+        if not self.instance and value < timezone.now().date():
             raise serializers.ValidationError("Start date cannot be in the past.")
         return value
 
