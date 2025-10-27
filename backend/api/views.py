@@ -671,9 +671,15 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         """Use different serializers for create vs read operations"""
-        if self.action == 'create':
+        if self.action in ['create', 'update', 'partial_update']:
             return TransactionCreateSerializer
         return TransactionSerializer
+
+    def get_serializer_context(self):
+        """Pass request context to serializer for validation"""
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
     def perform_create(self, serializer):
         """Automatically set the user when creating a transaction"""

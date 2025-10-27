@@ -8,18 +8,24 @@ export default function Dashboard() {
   const { user, logout } = useAuth();
   const [loading, setLoading] = useState(true);
   const [budgetSummary, setBudgetSummary] = useState(null);
+  const [recentTransactions, setRecentTransactions] = useState([]);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchBudgetSummary();
+    fetchDashboardData();
   }, []);
 
-  const fetchBudgetSummary = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const response = await apiClient.get('/budgets/summary/');
-      setBudgetSummary(response.data);
+      const [budgetRes, transactionsRes] = await Promise.all([
+        apiClient.get('/budgets/summary/'),
+        apiClient.get('/transactions/recent/'),
+      ]);
+
+      setBudgetSummary(budgetRes.data);
+      setRecentTransactions(transactionsRes.data);
     } catch (err) {
-      console.error('Error fetching budget summary:', err);
+      console.error('Error fetching dashboard data:', err);
       setError('Failed to load budget data');
     } finally {
       setLoading(false);
@@ -230,44 +236,92 @@ export default function Dashboard() {
               )}
             </div>
 
+            {/* Recent Transactions */}
+            {recentTransactions.length > 0 && (
+              <div className="card mb-8">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-semibold text-impulse-gray-dark">
+                    Recent Transactions
+                  </h3>
+                  <button
+                    onClick={() => navigate('/transactions')}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    View All →
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {recentTransactions.slice(0, 5).map((transaction) => (
+                    <div
+                      key={transaction.id}
+                      className="flex justify-between items-center py-2 border-b last:border-b-0"
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-semibold text-impulse-gray-dark">
+                            {transaction.description}
+                          </h4>
+                          {transaction.is_impulse && (
+                            <span className="bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded">
+                              Impulse
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-impulse-gray">
+                          {transaction.category_name || 'Uncategorized'} •{' '}
+                          {new Date(transaction.transaction_date).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-impulse-gray-dark">
+                          ${parseFloat(transaction.amount).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Quick Actions */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <button
-                onClick={() => navigate('/transactions/add')}
+                onClick={() => navigate('/transactions')}
                 className="card hover:shadow-lg transition-shadow cursor-pointer text-left"
               >
-                <div className="text-4xl mb-2">➕</div>
+                <div className="text-4xl mb-2">💳</div>
                 <h3 className="font-semibold text-impulse-gray-dark mb-1">
-                  Add Transaction
+                  Transactions
                 </h3>
                 <p className="text-sm text-impulse-gray">
-                  Record a new expense or purchase
+                  View and manage all transactions
                 </p>
               </button>
 
               <button
-                onClick={() => navigate('/impulse')}
-                className="card hover:shadow-lg transition-shadow cursor-pointer text-left bg-impulse-red-light border-2 border-impulse-red"
+                onClick={() => navigate('/transactions?form=impulse')}
+                className="card hover:shadow-xl transition-all cursor-pointer text-left bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-500 hover:border-red-600"
               >
                 <div className="text-4xl mb-2">⚡</div>
-                <h3 className="font-semibold text-impulse-red-dark mb-1">
-                  Impulse Purchase
+                <h3 className="font-semibold text-red-700 mb-1">
+                  Log Impulse Buy
                 </h3>
-                <p className="text-sm text-impulse-gray">
-                  Log an impulse buy (with pause timer)
+                <p className="text-sm text-red-600 font-medium">
+                  Quick impulse purchase logging
                 </p>
               </button>
 
               <button
-                onClick={() => navigate('/reports')}
+                onClick={() => navigate('/budget/edit')}
                 className="card hover:shadow-lg transition-shadow cursor-pointer text-left"
               >
-                <div className="text-4xl mb-2">📊</div>
+                <div className="text-4xl mb-2">💰</div>
                 <h3 className="font-semibold text-impulse-gray-dark mb-1">
-                  View Reports
+                  Edit Budget
                 </h3>
                 <p className="text-sm text-impulse-gray">
-                  See detailed spending analytics
+                  Adjust budget allocations
                 </p>
               </button>
             </div>
