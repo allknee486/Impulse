@@ -6,6 +6,8 @@ import SignUp from './pages/SignUp.jsx';
 import Dashboard from './pages/Dashboard';
 import BudgetSetup from './pages/BudgetSetup';
 import BudgetEdit from './pages/BudgetEdit';
+import Transactions from './pages/Transactions';
+import TransactionsTest from './pages/TransactionsTest';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -39,6 +41,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <BudgetEdit />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/transactions"
+            element={
+              <ProtectedRoute>
+                <Transactions />
               </ProtectedRoute>
             }
           />

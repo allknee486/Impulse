@@ -105,31 +105,56 @@ class BudgetSerializer(serializers.ModelSerializer):
 
 class TransactionSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
+    budget_name = serializers.CharField(source='budget.name', read_only=True)
     username = serializers.CharField(source='user.username', read_only=True)
 
     class Meta:
         model = Transaction
-        fields = ['id', 'amount', 'description', 'notes', 'transaction_date', 'is_impulse', 'created_at', 'category_name', 'username']
-        read_only_fields = ['id', 'user', 'created_at', 'category_name', 'username']
+        fields = [
+            'id', 'budget', 'budget_name', 'category', 'category_name',
+            'amount', 'description', 'notes', 'transaction_date',
+            'is_impulse', 'created_at', 'username'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'category_name', 'budget_name', 'username']
 
     def validate_amount(self, value):
         if value <= 0:
             raise serializers.ValidationError("Amount must be greater than 0.")
         return value
 
-    def validate_is_impulse(self, value):
-        if value not in [True, False]:
-            raise serializers.ValidationError("Is impulse must be a boolean value.")
+    def validate_category(self, value):
+        """Ensure category belongs to the current user"""
+        if value and value.user != self.context['request'].user:
+            raise serializers.ValidationError("You can only use your own categories.")
+        return value
+
+    def validate_budget(self, value):
+        """Ensure budget belongs to the current user"""
+        if value and value.user != self.context['request'].user:
+            raise serializers.ValidationError("You can only use your own budgets.")
+        return value
 
 class TransactionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Transaction
-        fields = ['amount', 'description', 'notes', 'transaction_date', 'is_impulse']
+        fields = ['budget', 'category', 'amount', 'description', 'notes', 'transaction_date', 'is_impulse']
         read_only_fields = ['user', 'created_at']
 
     def validate_amount(self, value):
         if value <= 0:
             raise serializers.ValidationError("Amount must be greater than 0.")
+        return value
+
+    def validate_category(self, value):
+        """Ensure category belongs to the current user"""
+        if value and value.user != self.context['request'].user:
+            raise serializers.ValidationError("You can only use your own categories.")
+        return value
+
+    def validate_budget(self, value):
+        """Ensure budget belongs to the current user"""
+        if value and value.user != self.context['request'].user:
+            raise serializers.ValidationError("You can only use your own budgets.")
         return value
 
 class SavingsGoalSerializer(serializers.ModelSerializer):
