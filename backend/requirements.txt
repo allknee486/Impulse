@@ -12,3 +12,4 @@ psycopg2-binary==2.9.11
 whitenoise==6.11.0
 gunicorn==23.0.0
 uvicorn==0.37.0
+daphne==4.2.1
