@@ -1,5 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+<<<<<<< HEAD
+from .views import AuthViewSet, DashboardViewSet, AnalyticsViewSet
+=======
 from .views import (
     AuthViewSet,
     DashboardViewSet,
@@ -9,14 +12,18 @@ from .views import (
     SavingsGoalViewSet,
     AnalyticsViewSet
 )
+>>>>>>> origin/main
 
 router = DefaultRouter()
 router.register(r'auth', AuthViewSet, basename='auth')
 router.register(r'dashboard', DashboardViewSet, basename='dashboard')
+<<<<<<< HEAD
+=======
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'budgets', BudgetViewSet, basename='budget')
 router.register(r'transactions', TransactionViewSet, basename='transaction')
 router.register(r'savings-goals', SavingsGoalViewSet, basename='savingsgoal')
+>>>>>>> origin/main
 router.register(r'analytics', AnalyticsViewSet, basename='analytics')
 
 urlpatterns = [
