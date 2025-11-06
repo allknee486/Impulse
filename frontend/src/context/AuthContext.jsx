@@ -7,6 +7,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [hasBudget, setHasBudget] = useState(false);
 
   // Check if user is already logged in on mount
   useEffect(() => {
@@ -16,10 +17,15 @@ export const AuthProvider = ({ children }) => {
         try {
           const response = await apiClient.get('/auth/me/');
           setUser(response.data);
+          
+          // Check if user has a budget
+          const budgetCheck = await apiClient.get('/budgets/check-exists/');
+          setHasBudget(budgetCheck.data.hasBudget);
         } catch (err) {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
           setUser(null);
+          setHasBudget(false);
         }
       }
       setLoading(false);
@@ -45,6 +51,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('accessToken', tokens.access);
       localStorage.setItem('refreshToken', tokens.refresh);
       setUser(userData);
+      setHasBudget(false); // New users don't have budgets
 
       return { success: true, data: userData };
     } catch (err) {
@@ -68,7 +75,11 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('refreshToken', tokens.refresh);
       setUser(userData);
 
-      return { success: true, data: userData };
+      // Check if user has a budget
+      const budgetCheck = await apiClient.get('/budgets/check-exists/');
+      setHasBudget(budgetCheck.data.hasBudget);
+
+      return { success: true, data: userData, hasBudget: budgetCheck.data.hasBudget };
     } catch (err) {
       const errorMsg = err.response?.data?.non_field_errors?.[0] || 'Login failed';
       setError(errorMsg);
@@ -86,6 +97,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       setUser(null);
+      setHasBudget(false);
     }
   }, []);
 
@@ -93,10 +105,12 @@ export const AuthProvider = ({ children }) => {
     user,
     loading,
     error,
+    hasBudget,
     register,
     login,
     logout,
     isAuthenticated: !!user,
+    setHasBudget, // Allow manual update after budget creation
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

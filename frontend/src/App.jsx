@@ -4,6 +4,10 @@ import { AuthProvider } from './context/AuthContext';
 import LogIn from './pages/LogIn';
 import SignUp from './pages/SignUp.jsx';
 import Dashboard from './pages/Dashboard';
+import BudgetSetup from './pages/BudgetSetup';
+import BudgetEdit from './pages/BudgetEdit';
+import Transactions from './pages/Transactions';
+import TransactionsTest from './pages/TransactionsTest';
 import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
@@ -11,8 +15,11 @@ function App() {
     <Router>
       <AuthProvider>
         <Routes>
+          {/* Public Routes */}
           <Route path="/login" element={<LogIn />} />
           <Route path="/signup" element={<SignUp />} />
+
+          {/* Protected Routes */}
           <Route
             path="/dashboard"
             element={
@@ -21,7 +28,35 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/budget/setup"
+            element={
+              <ProtectedRoute>
+                <BudgetSetup />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/budget/edit"
+            element={
+              <ProtectedRoute>
+                <BudgetEdit />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/transactions"
+            element={
+              <ProtectedRoute>
+                <Transactions />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Default Route */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
+          {/* 404 Page */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </AuthProvider>
