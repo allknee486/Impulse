@@ -30,6 +30,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 # Django models and utilities
 from django.contrib.auth.models import User
 from django.db.models import Sum, Q, Count
+from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from decimal import Decimal
 
@@ -244,6 +245,7 @@ class DashboardViewSet(viewsets.ViewSet):
         return Response(data, status=status.HTTP_200_OK)
 
 
+<<<<<<< HEAD
 class CategoryViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Category model - manages spending categories
