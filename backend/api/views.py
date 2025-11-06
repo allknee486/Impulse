@@ -30,10 +30,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 # Django models and utilities
 from django.contrib.auth.models import User
 from django.db.models import Sum, Q, Count
-<<<<<<< HEAD
 from django.db.models.functions import TruncMonth
-=======
->>>>>>> origin/main
 from django.utils import timezone
 from decimal import Decimal
 
@@ -248,7 +245,6 @@ class DashboardViewSet(viewsets.ViewSet):
         return Response(data, status=status.HTTP_200_OK)
 
 
-<<<<<<< HEAD
 class AnalyticsViewSet(viewsets.ViewSet):
     """Aggregated analytics for user spending.
 
@@ -315,7 +311,6 @@ class AnalyticsViewSet(viewsets.ViewSet):
         }
 
         return Response(data, status=status.HTTP_200_OK)
-=======
 class CategoryViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Category model - manages spending categories
@@ -942,6 +937,13 @@ class AnalyticsViewSet(viewsets.ViewSet):
     - GET /api/analytics/spending-trend/ - Line chart data (30 days)
     - GET /api/analytics/impulse-analysis/ - Impulse vs planned spending
     - GET /api/analytics/monthly-summary/ - All key metrics for dashboard
+    - GET /api/analytics/weekly-spending/ - Weekly spending aggregation
+    - GET /api/analytics/monthly-comparison/ - Compare multiple months
+    - GET /api/analytics/yearly-breakdown/ - Year-over-year comparison
+    - GET /api/analytics/category-trends/ - Category spending over time
+    - GET /api/analytics/budget-vs-actual/ - Budget vs actual spending visualization
+    - GET /api/analytics/spending-heatmap/ - Calendar heatmap data
+    - GET /api/analytics/time-range/ - Flexible time range spending data
     """
     permission_classes = [IsAuthenticated]
 
@@ -1092,4 +1094,537 @@ class AnalyticsViewSet(viewsets.ViewSet):
             'active_goals': active_goals,
             'is_over_budget': monthly_spending > total_budget
         })
->>>>>>> origin/main
+
+    @action(detail=False, methods=['get'])
+    def weekly_spending(self, request):
+        """
+        Get weekly spending aggregation for the last N weeks
+        GET /api/analytics/weekly-spending/?weeks=12
+        
+        Query params:
+        - weeks: Number of weeks to return (default: 12)
+        """
+        weeks = int(request.query_params.get('weeks', 12))
+        now = timezone.now().date()
+        
+        weekly_data = []
+        
+        for i in range(weeks):
+            week_end = now - timedelta(weeks=i)
+            week_start = week_end - timedelta(days=6)
+            
+            week_total = Transaction.objects.filter(
+                user=request.user,
+                transaction_date__date__gte=week_start,
+                transaction_date__date__lte=week_end
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+            
+            week_number = week_end.isocalendar()[1]
+            year = week_end.year
+            
+            weekly_data.append({
+                'week_start': week_start.strftime('%Y-%m-%d'),
+                'week_end': week_end.strftime('%Y-%m-%d'),
+                'week_number': week_number,
+                'year': year,
+                'amount': float(week_total),
+                'label': f'Week {week_number}, {year}'
+            })
+        
+        # Reverse to show oldest first
+        weekly_data.reverse()
+        return Response(weekly_data)
+
+    @action(detail=False, methods=['get'])
+    def monthly_comparison(self, request):
+        """
+        Compare spending across multiple months
+        GET /api/analytics/monthly-comparison/?months=6
+        
+        Query params:
+        - months: Number of months to compare (default: 6)
+        """
+        months = int(request.query_params.get('months', 6))
+        now = timezone.now().date()
+        
+        monthly_data = []
+        
+        for i in range(months):
+            # Calculate month start and end
+            if i == 0:
+                month_start = datetime(now.year, now.month, 1).date()
+                month_end = now
+            else:
+                # Go back i months
+                if now.month > i:
+                    month = now.month - i
+                    year = now.year
+                else:
+                    month = 12 + now.month - i
+                    year = now.year - 1
+                
+                month_start = datetime(year, month, 1).date()
+                
+                # Calculate month end
+                if month == 12:
+                    month_end = datetime(year + 1, 1, 1).date() - timedelta(days=1)
+                else:
+                    month_end = datetime(year, month + 1, 1).date() - timedelta(days=1)
+            
+            month_total = Transaction.objects.filter(
+                user=request.user,
+                transaction_date__date__gte=month_start,
+                transaction_date__date__lte=month_end
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+            
+            impulse_total = Transaction.objects.filter(
+                user=request.user,
+                is_impulse=True,
+                transaction_date__date__gte=month_start,
+                transaction_date__date__lte=month_end
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+            
+            transaction_count = Transaction.objects.filter(
+                user=request.user,
+                transaction_date__date__gte=month_start,
+                transaction_date__date__lte=month_end
+            ).count()
+            
+            monthly_data.append({
+                'month': month_start.strftime('%Y-%m'),
+                'month_name': month_start.strftime('%B %Y'),
+                'total_spending': float(month_total),
+                'impulse_spending': float(impulse_total),
+                'planned_spending': float(month_total - impulse_total),
+                'transaction_count': transaction_count
+            })
+        
+        # Reverse to show oldest first
+        monthly_data.reverse()
+        return Response(monthly_data)
+
+    @action(detail=False, methods=['get'])
+    def yearly_breakdown(self, request):
+        """
+        Get year-over-year spending comparison
+        GET /api/analytics/yearly-breakdown/?years=3
+        
+        Query params:
+        - years: Number of years to compare (default: 3)
+        """
+        years = int(request.query_params.get('years', 3))
+        now = timezone.now().date()
+        current_year = now.year
+        
+        yearly_data = []
+        
+        for i in range(years):
+            year = current_year - i
+            year_start = datetime(year, 1, 1).date()
+            year_end = datetime(year, 12, 31).date()
+            
+            # If current year, only go up to today
+            if year == current_year:
+                year_end = now
+            
+            year_total = Transaction.objects.filter(
+                user=request.user,
+                transaction_date__date__gte=year_start,
+                transaction_date__date__lte=year_end
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+            
+            # Get monthly breakdown for this year
+            monthly_breakdown = []
+            for month in range(1, 13):
+                month_start = datetime(year, month, 1).date()
+                if month == 12:
+                    month_end = datetime(year + 1, 1, 1).date() - timedelta(days=1)
+                else:
+                    month_end = datetime(year, month + 1, 1).date() - timedelta(days=1)
+                
+                # Don't include future months for current year
+                if year == current_year and month > now.month:
+                    break
+                
+                month_total = Transaction.objects.filter(
+                    user=request.user,
+                    transaction_date__date__gte=month_start,
+                    transaction_date__date__lte=month_end
+                ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+                
+                monthly_breakdown.append({
+                    'month': month,
+                    'month_name': month_start.strftime('%B'),
+                    'amount': float(month_total)
+                })
+            
+            transaction_count = Transaction.objects.filter(
+                user=request.user,
+                transaction_date__date__gte=year_start,
+                transaction_date__date__lte=year_end
+            ).count()
+            
+            yearly_data.append({
+                'year': year,
+                'total_spending': float(year_total),
+                'transaction_count': transaction_count,
+                'monthly_breakdown': monthly_breakdown,
+                'average_monthly': float(year_total / len(monthly_breakdown)) if monthly_breakdown else 0
+            })
+        
+        # Reverse to show oldest first
+        yearly_data.reverse()
+        return Response(yearly_data)
+
+    @action(detail=False, methods=['get'])
+    def category_trends(self, request):
+        """
+        Get category spending trends over time
+        GET /api/analytics/category-trends/?months=6
+        
+        Query params:
+        - months: Number of months to analyze (default: 6)
+        Returns data suitable for multi-line charts
+        """
+        months = int(request.query_params.get('months', 6))
+        now = timezone.now().date()
+        
+        # Get all categories
+        categories = Category.objects.filter(user=request.user)
+        
+        # Build time series data
+        monthly_data = []
+        
+        for i in range(months):
+            if i == 0:
+                month_start = datetime(now.year, now.month, 1).date()
+                month_end = now
+            else:
+                if now.month > i:
+                    month = now.month - i
+                    year = now.year
+                else:
+                    month = 12 + now.month - i
+                    year = now.year - 1
+                
+                month_start = datetime(year, month, 1).date()
+                
+                if month == 12:
+                    month_end = datetime(year + 1, 1, 1).date() - timedelta(days=1)
+                else:
+                    month_end = datetime(year, month + 1, 1).date() - timedelta(days=1)
+            
+            month_label = month_start.strftime('%Y-%m')
+            
+            # Get spending per category for this month
+            category_spending = {}
+            for category in categories:
+                total = Transaction.objects.filter(
+                    user=request.user,
+                    category=category,
+                    transaction_date__date__gte=month_start,
+                    transaction_date__date__lte=month_end
+                ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+                
+                if float(total) > 0:
+                    category_spending[category.name] = float(total)
+            
+            monthly_data.append({
+                'month': month_label,
+                'month_name': month_start.strftime('%B %Y'),
+                'categories': category_spending
+            })
+        
+        # Reverse to show oldest first
+        monthly_data.reverse()
+        
+        # Format for chart libraries (each category as a series)
+        chart_data = {
+            'labels': [item['month_name'] for item in monthly_data],
+            'series': []
+        }
+        
+        # Get unique categories across all months
+        all_categories = set()
+        for item in monthly_data:
+            all_categories.update(item['categories'].keys())
+        
+        # Create a series for each category
+        for category_name in sorted(all_categories):
+            series_data = []
+            for item in monthly_data:
+                series_data.append(item['categories'].get(category_name, 0))
+            
+            chart_data['series'].append({
+                'name': category_name,
+                'data': series_data
+            })
+        
+        return Response({
+            'monthly_data': monthly_data,
+            'chart_data': chart_data
+        })
+
+    @action(detail=False, methods=['get'])
+    def budget_vs_actual(self, request):
+        """
+        Compare budget allocations vs actual spending
+        GET /api/analytics/budget-vs-actual/
+        
+        Returns data showing budgeted vs actual spending by category
+        Suitable for bar charts or comparison visualizations
+        """
+        # Get active budget
+        active_budget = Budget.objects.filter(
+            user=request.user,
+            is_active=True
+        ).first()
+        
+        if not active_budget:
+            return Response({
+                'error': 'No active budget found',
+                'data': []
+            })
+        
+        now = timezone.now().date()
+        budget_start = active_budget.start_date
+        budget_end = min(active_budget.end_date, now)
+        
+        # Get category allocations
+        allocations = BudgetCategoryAllocation.objects.filter(budget=active_budget)
+        
+        comparison_data = []
+        
+        for allocation in allocations:
+            # Get actual spending for this category within budget period
+            actual_spending = Transaction.objects.filter(
+                user=request.user,
+                budget=active_budget,
+                category=allocation.category,
+                transaction_date__date__gte=budget_start,
+                transaction_date__date__lte=budget_end
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+            
+            allocated = float(allocation.allocated_amount)
+            actual = float(actual_spending)
+            remaining = allocated - actual
+            percentage_used = (actual / allocated * 100) if allocated > 0 else 0
+            
+            comparison_data.append({
+                'category_id': allocation.category.id,
+                'category_name': allocation.category.name,
+                'allocated': allocated,
+                'actual': actual,
+                'remaining': remaining,
+                'percentage_used': round(percentage_used, 2),
+                'over_budget': actual > allocated
+            })
+        
+        # Also include categories with spending but no allocation
+        categories_with_spending = Transaction.objects.filter(
+            user=request.user,
+            budget=active_budget,
+            transaction_date__date__gte=budget_start,
+            transaction_date__date__lte=budget_end
+        ).values('category').annotate(total=Sum('amount')).exclude(category=None)
+        
+        allocated_category_ids = [item['category_id'] for item in comparison_data]
+        
+        for item in categories_with_spending:
+            if item['category'] not in allocated_category_ids:
+                category = Category.objects.get(id=item['category'])
+                comparison_data.append({
+                    'category_id': category.id,
+                    'category_name': category.name,
+                    'allocated': 0,
+                    'actual': float(item['total']),
+                    'remaining': -float(item['total']),
+                    'percentage_used': 0,
+                    'over_budget': True
+                })
+        
+        total_allocated = sum(item['allocated'] for item in comparison_data)
+        total_actual = sum(item['actual'] for item in comparison_data)
+        
+        return Response({
+            'budget_id': active_budget.id,
+            'budget_name': active_budget.name,
+            'budget_period': {
+                'start': budget_start.isoformat(),
+                'end': budget_end.isoformat()
+            },
+            'total_allocated': total_allocated,
+            'total_actual': total_actual,
+            'total_remaining': total_allocated - total_actual,
+            'categories': comparison_data
+        })
+
+    @action(detail=False, methods=['get'])
+    def spending_heatmap(self, request):
+        """
+        Get spending data formatted for calendar heatmap visualization
+        GET /api/analytics/spending-heatmap/?year=2024
+        
+        Query params:
+        - year: Year to get data for (default: current year)
+        - days: Number of days to include (default: 365, for full year)
+        """
+        year = int(request.query_params.get('year', timezone.now().year))
+        days = int(request.query_params.get('days', 365))
+        
+        now = timezone.now().date()
+        end_date = min(datetime(year, 12, 31).date(), now)
+        start_date = end_date - timedelta(days=days-1)
+        
+        # Get daily spending
+        daily_data = {}
+        current_date = start_date
+        
+        while current_date <= end_date:
+            daily_total = Transaction.objects.filter(
+                user=request.user,
+                transaction_date__date=current_date
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+            
+            daily_data[current_date.isoformat()] = float(daily_total)
+            current_date += timedelta(days=1)
+        
+        # Calculate statistics for color scaling
+        amounts = list(daily_data.values())
+        if amounts:
+            max_amount = max(amounts)
+            min_amount = min(amounts)
+            avg_amount = sum(amounts) / len(amounts)
+        else:
+            max_amount = min_amount = avg_amount = 0
+        
+        return Response({
+            'year': year,
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'daily_data': daily_data,
+            'statistics': {
+                'max': max_amount,
+                'min': min_amount,
+                'average': avg_amount,
+                'total': sum(amounts)
+            }
+        })
+
+    @action(detail=False, methods=['get'])
+    def time_range(self, request):
+        """
+        Get spending data for a flexible time range
+        GET /api/analytics/time-range/?start_date=2024-01-01&end_date=2024-12-31&group_by=day
+        
+        Query params:
+        - start_date: Start date (YYYY-MM-DD, default: 30 days ago)
+        - end_date: End date (YYYY-MM-DD, default: today)
+        - group_by: Grouping period - 'day', 'week', 'month' (default: 'day')
+        """
+        # Parse dates
+        end_date_str = request.query_params.get('end_date')
+        if end_date_str:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        else:
+            end_date = timezone.now().date()
+        
+        start_date_str = request.query_params.get('start_date')
+        if start_date_str:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        else:
+            start_date = end_date - timedelta(days=30)
+        
+        group_by = request.query_params.get('group_by', 'day').lower()
+        
+        if start_date > end_date:
+            return Response(
+                {'error': 'start_date must be before end_date'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        data = []
+        
+        if group_by == 'day':
+            current_date = start_date
+            while current_date <= end_date:
+                daily_total = Transaction.objects.filter(
+                    user=request.user,
+                    transaction_date__date=current_date
+                ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+                
+                data.append({
+                    'date': current_date.isoformat(),
+                    'label': current_date.strftime('%Y-%m-%d'),
+                    'amount': float(daily_total)
+                })
+                current_date += timedelta(days=1)
+        
+        elif group_by == 'week':
+            current_date = start_date
+            while current_date <= end_date:
+                week_end = min(current_date + timedelta(days=6), end_date)
+                
+                week_total = Transaction.objects.filter(
+                    user=request.user,
+                    transaction_date__date__gte=current_date,
+                    transaction_date__date__lte=week_end
+                ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+                
+                data.append({
+                    'date': current_date.isoformat(),
+                    'label': f"Week of {current_date.strftime('%Y-%m-%d')}",
+                    'amount': float(week_total)
+                })
+                current_date += timedelta(days=7)
+        
+        elif group_by == 'month':
+            current_date = start_date
+            while current_date <= end_date:
+                # Calculate month end
+                if current_date.month == 12:
+                    month_end = datetime(current_date.year + 1, 1, 1).date() - timedelta(days=1)
+                else:
+                    month_end = datetime(current_date.year, current_date.month + 1, 1).date() - timedelta(days=1)
+                
+                month_end = min(month_end, end_date)
+                
+                month_total = Transaction.objects.filter(
+                    user=request.user,
+                    transaction_date__date__gte=current_date,
+                    transaction_date__date__lte=month_end
+                ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+                
+                data.append({
+                    'date': current_date.isoformat(),
+                    'label': current_date.strftime('%B %Y'),
+                    'amount': float(month_total)
+                })
+                
+                # Move to next month
+                if current_date.month == 12:
+                    current_date = datetime(current_date.year + 1, 1, 1).date()
+                else:
+                    current_date = datetime(current_date.year, current_date.month + 1, 1).date()
+        
+        else:
+            return Response(
+                {'error': "group_by must be 'day', 'week', or 'month'"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        total_spending = sum(item['amount'] for item in data)
+        avg_spending = total_spending / len(data) if data else 0
+        
+        return Response({
+            'start_date': start_date.isoformat(),
+            'end_date': end_date.isoformat(),
+            'group_by': group_by,
+            'data': data,
+            'summary': {
+                'total_spending': total_spending,
+                'average_spending': round(avg_spending, 2),
+                'data_points': len(data)
+            }
+        })
+
