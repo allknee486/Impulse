@@ -80,7 +80,14 @@ urlpatterns = [
 # GET    /api/savings-goals/summary/           - Get goals summary
 #
 # Analytics endpoints:
-# GET    /api/analytics/spending-by-category/  - Get spending by category
-# GET    /api/analytics/spending-trend/        - Get spending trend (30 days)
-# GET    /api/analytics/impulse-analysis/     - Get impulse analysis
-# GET    /api/analytics/monthly-summary/       - Get monthly summary
+# GET    /api/analytics/spending-by-category/  - Get spending by category (pie chart data)
+# GET    /api/analytics/spending-trend/        - Get spending trend (30 days, line chart)
+# GET    /api/analytics/impulse-analysis/      - Get impulse vs planned spending analysis
+# GET    /api/analytics/monthly-summary/       - Get monthly summary metrics
+# GET    /api/analytics/weekly-spending/       - Get weekly spending aggregation (?weeks=12)
+# GET    /api/analytics/monthly-comparison/     - Compare spending across months (?months=6)
+# GET    /api/analytics/yearly-breakdown/      - Year-over-year comparison (?years=3)
+# GET    /api/analytics/category-trends/       - Category spending trends over time (?months=6)
+# GET    /api/analytics/budget-vs-actual/       - Budget vs actual spending by category
+# GET    /api/analytics/spending-heatmap/      - Calendar heatmap data (?year=2024&days=365)
+# GET    /api/analytics/time-range/            - Flexible time range data (?start_date&end_date&group_by)
