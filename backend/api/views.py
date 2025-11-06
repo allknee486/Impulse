@@ -23,7 +23,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 # Django models and utilities
 from django.contrib.auth.models import User
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Count
+from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from datetime import timedelta
 
@@ -227,6 +228,74 @@ class DashboardViewSet(viewsets.ViewSet):
             'impulsesResistedThisMonth': int(resisted_month),
             'spendingByCategory': spending,
             'streakDaysWithoutImpulse': int(days),
+        }
+
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class AnalyticsViewSet(viewsets.ViewSet):
+    """Aggregated analytics for user spending.
+
+    GET /api/analytics/
+    Returns:
+    - totalSpent: total amount across all transactions
+    - monthlyTotals: list of { month: YYYY-MM, total: number } for last 6 months
+    - byCategory: { categoryName: total }
+    - avgDailySpend30d: average daily spend over the last 30 days
+    - impulseRate30d: percentage of transactions marked is_impulse in last 30 days
+    """
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        user = request.user
+        now = timezone.now()
+        start_30d = now - timedelta(days=30)
+
+        qs = Transaction.objects.filter(user=user)
+
+        # total spent (all time)
+        total_spent = qs.aggregate(total=Sum('amount'))['total'] or 0
+
+        # monthly totals for last 6 months (including current)
+        start_6m = (now.replace(day=1, hour=0, minute=0, second=0, microsecond=0) - timedelta(days=5*31))
+        monthly_qs = (
+            qs.filter(transaction_date__gte=start_6m)
+              .annotate(month=TruncMonth('transaction_date'))
+              .values('month')
+              .annotate(total=Sum('amount'))
+              .order_by('month')
+        )
+        monthly_totals = []
+        for row in monthly_qs:
+            m = row['month']
+            label = f"{m.year:04d}-{m.month:02d}"
+            monthly_totals.append({
+                'month': label,
+                'total': float(row['total'] or 0),
+            })
+
+        # spending by category (all time)
+        by_category = {}
+        for row in qs.values('category__name').annotate(total=Sum('amount')):
+            name = row['category__name'] or 'Uncategorized'
+            by_category[name] = float(row['total'] or 0)
+
+        # average daily spend last 30 days
+        last_30_total = qs.filter(transaction_date__gte=start_30d).aggregate(total=Sum('amount'))['total'] or 0
+        avg_daily_30 = float(last_30_total) / 30.0
+
+        # impulse rate last 30 days
+        last_30 = qs.filter(transaction_date__gte=start_30d)
+        last_30_count = last_30.aggregate(c=Count('id'))['c'] or 0
+        last_30_impulse = last_30.filter(is_impulse=True).aggregate(c=Count('id'))['c'] or 0
+        impulse_rate = float(last_30_impulse) / float(last_30_count) * 100.0 if last_30_count else 0.0
+
+        data = {
+            'totalSpent': float(total_spent),
+            'monthlyTotals': monthly_totals,
+            'byCategory': by_category,
+            'avgDailySpend30d': avg_daily_30,
+            'impulseRate30d': impulse_rate,
         }
 
         return Response(data, status=status.HTTP_200_OK)
