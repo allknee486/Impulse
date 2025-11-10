@@ -9,7 +9,7 @@ fi
 
 cd backend || exit
 
-pip install -r requirements.txt > /dev/null
+pip install -r requirements.txt
 python manage.py makemigrations
 python manage.py migrate
 yes yes | python manage.py collectstatic > /dev/null
