@@ -19,7 +19,7 @@ import TransactionList from '../components/TransactionList';
 import apiClient from '../api/apiClient';
 
 const Transactions = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
@@ -118,21 +118,58 @@ const Transactions = () => {
     setShowForm(true);
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
       <nav className="bg-white shadow-card">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between items-center h-16">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="text-impulse-indigo hover:text-impulse-indigo-dark font-semibold"
-            >
-              ← Back to Dashboard
-            </button>
-            <h1 className="text-xl font-heading font-bold text-impulse-gray-dark">
-              Transactions
-            </h1>
+            <div className="flex items-center gap-6">
+              <h1
+                className="text-2xl font-heading font-bold text-impulse-indigo cursor-pointer"
+                onClick={() => navigate('/dashboard')}
+              >
+                Impulse
+              </h1>
+              <div className="flex gap-4 text-sm">
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="text-impulse-gray hover:text-impulse-indigo"
+                >
+                  Dashboard
+                </button>
+                <button
+                  onClick={() => navigate('/analytics')}
+                  className="text-impulse-gray hover:text-impulse-indigo"
+                >
+                  Analytics
+                </button>
+                <button
+                  onClick={() => navigate('/transactions')}
+                  className="text-impulse-indigo font-semibold border-b-2 border-impulse-indigo"
+                >
+                  Transactions
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 text-impulse-gray-dark">
+              <div>
+                <span className="text-sm">Welcome, </span>
+                <span className="font-semibold">
+                  {user?.first_name || user?.username}
+                </span>
+              </div>
+
+              <button onClick={handleLogout} className="btn-danger">
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </nav>

@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import LogIn from './pages/LogIn';
 import SignUp from './pages/SignUp.jsx';
 import Dashboard from './pages/Dashboard';
+import Analytics from './pages/Analytics';
 import BudgetSetup from './pages/BudgetSetup';
 import BudgetEdit from './pages/BudgetEdit';
 import Transactions from './pages/Transactions';
@@ -25,6 +26,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/analytics"
+            element={
+              <ProtectedRoute>
+                <Analytics />
               </ProtectedRoute>
             }
           />
