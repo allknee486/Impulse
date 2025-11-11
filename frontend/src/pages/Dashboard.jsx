@@ -9,6 +9,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [budgetSummary, setBudgetSummary] = useState(null);
   const [recentTransactions, setRecentTransactions] = useState([]);
+  const [dashboardMetrics, setDashboardMetrics] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -17,13 +18,15 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      const [budgetRes, transactionsRes] = await Promise.all([
+      const [budgetRes, transactionsRes, dashboardRes] = await Promise.all([
         apiClient.get('/budgets/summary/'),
         apiClient.get('/transactions/recent/'),
+        apiClient.get('/dashboard/'),
       ]);
 
       setBudgetSummary(budgetRes.data);
       setRecentTransactions(transactionsRes.data);
+      setDashboardMetrics(dashboardRes.data);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError('Failed to load budget data');
@@ -69,9 +72,31 @@ export default function Dashboard() {
       <nav className="bg-white shadow-card">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between items-center h-16">
-            <h1 className="text-2xl font-heading font-bold text-impulse-indigo">
-              Impulse
-            </h1>
+            <div className="flex items-center gap-6">
+              <h1 className="text-2xl font-heading font-bold text-impulse-indigo cursor-pointer">
+                Impulse
+              </h1>
+              <div className="flex gap-4 text-sm">
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="text-impulse-indigo font-semibold border-b-2 border-impulse-indigo"
+                >
+                  Dashboard
+                </button>
+                <button
+                  onClick={() => navigate('/analytics')}
+                  className="text-impulse-gray hover:text-impulse-indigo"
+                >
+                  Analytics
+                </button>
+                <button
+                  onClick={() => navigate('/transactions')}
+                  className="text-impulse-gray hover:text-impulse-indigo"
+                >
+                  Transactions
+                </button>
+              </div>
+            </div>
 
             <div className="flex items-center gap-4 text-impulse-gray-dark">
               <div>
@@ -134,6 +159,47 @@ export default function Dashboard() {
           </div>
         ) : (
           <>
+            {/* Impulse & Savings Metrics */}
+            {dashboardMetrics && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="card bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-500">
+                  <p className="text-sm text-green-700 mb-1">Money Saved</p>
+                  <p className="text-3xl font-bold text-green-700">
+                    ${budgetSummary.remaining.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-green-600 mt-1">From resisting impulses</p>
+                </div>
+
+                <div className="card bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-500">
+                  <p className="text-sm text-blue-700 mb-1">Current Streak</p>
+                  <p className="text-3xl font-bold text-blue-700">
+                    {dashboardMetrics.streakDaysWithoutImpulse}
+                  </p>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Day{dashboardMetrics.streakDaysWithoutImpulse !== 1 ? 's' : ''} without impulse buy
+                  </p>
+                </div>
+
+                <div className="card bg-gradient-to-br from-red-50 to-red-50 border-2 border-red-500">
+                  <p className="text-sm text-red-700 mb-1">Impulse Purchases</p>
+                  <p className="text-3xl font-bold text-red-700">
+                    {dashboardMetrics.impulsesResistedThisMonth}
+                  </p>
+                  <p className="text-xs text-red-600 mt-1">This month</p>
+                </div>
+
+                <div className="card">
+                  <p className="text-sm text-impulse-gray mb-1">Quick Action</p>
+                  <button
+                    onClick={() => navigate('/analytics')}
+                    className="w-full mt-2 bg-impulse-indigo text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors font-semibold"
+                  >
+                    View Analytics
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <div className="card">
