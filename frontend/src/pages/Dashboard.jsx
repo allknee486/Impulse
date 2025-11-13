@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [budgetSummary, setBudgetSummary] = useState(null);
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [dashboardMetrics, setDashboardMetrics] = useState(null);
+  const [budgetAllocations, setBudgetAllocations] = useState([]);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -27,6 +28,12 @@ export default function Dashboard() {
       setBudgetSummary(budgetRes.data);
       setRecentTransactions(transactionsRes.data);
       setDashboardMetrics(dashboardRes.data);
+
+      // Fetch budget allocations if there's an active budget
+      if (budgetRes.data?.active_budget?.id) {
+        const allocationsRes = await apiClient.get(`/budgets/${budgetRes.data.active_budget.id}/allocations/`);
+        setBudgetAllocations(allocationsRes.data);
+      }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError('Failed to load budget data');
@@ -256,9 +263,13 @@ export default function Dashboard() {
               {budgetSummary.categories && budgetSummary.categories.length > 0 ? (
                 <div className="space-y-4">
                   {budgetSummary.categories.map((category) => {
-                    const allocated = budgetSummary.total_income / budgetSummary.categories.length; // Simple equal distribution for now
+                    // Find the allocated amount for this category from budget allocations
+                    const allocation = budgetAllocations.find(
+                      alloc => alloc.category === category.id
+                    );
+                    const allocated = allocation ? parseFloat(allocation.allocated_amount) : 0;
                     const percentage = calculatePercentage(category.spent, allocated);
-                    
+
                     return (
                       <div key={category.id} className="border-b last:border-b-0 pb-4 last:pb-0">
                         <div className="flex justify-between items-center mb-2">
@@ -275,11 +286,11 @@ export default function Dashboard() {
                               ${category.spent.toFixed(2)}
                             </p>
                             <p className="text-sm text-impulse-gray">
-                              of ${allocated.toFixed(2)}
+                              {allocated > 0 ? `of $${allocated.toFixed(2)}` : 'No allocation'}
                             </p>
                           </div>
                         </div>
-                        
+
                         {/* Progress Bar */}
                         <div className="w-full bg-gray-200 rounded-full h-3">
                           <div
@@ -288,7 +299,7 @@ export default function Dashboard() {
                           />
                         </div>
                         <p className="text-xs text-impulse-gray mt-1 text-right">
-                          {percentage.toFixed(1)}% used
+                          {allocated > 0 ? `${percentage.toFixed(1)}% used` : 'No budget allocated'}
                         </p>
                       </div>
                     );

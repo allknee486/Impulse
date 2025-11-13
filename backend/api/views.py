@@ -245,7 +245,6 @@ class DashboardViewSet(viewsets.ViewSet):
         return Response(data, status=status.HTTP_200_OK)
 
 
-<<<<<<< HEAD
 class CategoryViewSet(viewsets.ModelViewSet):
     """
     ViewSet for Category model - manages spending categories
