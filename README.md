@@ -10,6 +10,15 @@ A personal finance app that helps users track spending, resist impulse purchases
 - **Streak Tracking**: Monitor days without impulse purchases
 - **User Authentication**: Secure JWT-based authentication
 
+### Homepage
+
+<img width="1301" height="1263" alt="Screenshot From 2025-11-13 11-46-41" src="https://github.com/user-attachments/assets/c6ce4bcd-0b2b-4993-a984-42cb13d386dd" />
+
+### Analytics
+
+<img width="1264" height="1220" alt="Screenshot From 2025-11-13 11-49-11" src="https://github.com/user-attachments/assets/4f00f114-efa5-4095-97bb-e6f8086fe14e" />
+
+
 
 ## Prerequisites
 
