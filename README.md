@@ -1,24 +1,15 @@
 # Impulse
 
-A personal finance tracking application designed to help users manage budgets, track transactions, and analyze impulse spending patterns.
+A personal finance app that helps users track spending, resist impulse purchases, and stay within budget through category-based allocations and real-time analytics.
 
 ## Features
 
-- **User Authentication**: Secure JWT-based authentication with token refresh
-- **Budget Management**: Create and manage budgets with start/end dates
-- **Category Allocations**: Allocate budget amounts to specific spending categories
-- **Transaction Tracking**: Record and categorize expenses with impulse purchase flagging
-- **Analytics Dashboard**: Visualize spending patterns, category breakdowns, and impulse spending
-- **Savings Goals**: Set and track progress toward savings targets
-- **Real-time Insights**: Monitor budget vs. spending, category allocations, and financial trends
+- **Budget Management**: Create budgets with category-specific allocations
+- **Transaction Tracking**: Log expenses and flag impulse purchases
+- **Analytics & Insights**: Visualize spending patterns, category breakdowns, and impulse buying trends
+- **Streak Tracking**: Monitor days without impulse purchases
+- **User Authentication**: Secure JWT-based authentication
 
-## Tech Stack
-
-- **Backend**: Django 5.2 + Django REST Framework
-- **Frontend**: React 18 + Vite + Tailwind CSS
-- **Database**: PostgreSQL (default), SQLite (development fallback)
-- **Authentication**: JWT (djangorestframework-simplejwt)
-- **Deployment**: Configured for Render.com
 
 ## Prerequisites
 
@@ -185,7 +176,19 @@ Visit the Dashboard to see:
 
 ---
 
-## API Documentation
+## Pages
+
+- **SignUp**: New user registration with email, password, and profile details
+- **LogIn**: User authentication with username and password
+- **Dashboard**: Main overview showing budget summary, disposable income remaining, impulse purchase streak, spending by category, and recent transactions
+- **BudgetSetup**: First-time budget creation wizard for new users
+- **BudgetEdit**: Modify existing budgets and adjust category allocations
+- **Transactions**: View, filter, and manage all transactions; log new expenses with impulse purchase flagging
+- **Analytics**: Visualize spending trends, category breakdowns, and impulse buying patterns with charts
+
+---
+
+## API
 
 ### Authentication
 
@@ -194,7 +197,7 @@ All protected endpoints require JWT token in header:
 Authorization: Bearer <access_token>
 ```
 
-### Endpoint Overview
+### Endpoints
 
 The API provides the following resource endpoints:
 
@@ -205,8 +208,6 @@ The API provides the following resource endpoints:
 - **`/api/savings-goals/`** - Savings goal management (CRUD + progress tracking)
 - **`/api/analytics/`** - Analytics and insights (spending trends, category breakdowns)
 - **`/api/dashboard/`** - Dashboard metrics (aggregated stats)
-
-### Key Endpoints
 
 #### Authentication
 
@@ -319,39 +320,3 @@ curl -X GET http://localhost:8000/api/categories/ \
 ```
 
 ---
-
-## Project Structure
-
-```
-Impulse/
-├── backend/
-│   ├── api/
-│   │   ├── models.py
-│   │   ├── serializers.py
-│   │   ├── views.py
-│   │   └── urls.py
-│   ├── backend/
-│   │   ├── settings.py
-│   │   ├── urls.py
-│   │   └── wsgi.py
-│   ├── manage.py
-│   ├── requirements.txt
-│   └── db.sqlite3
-├── frontend/
-│   ├── src/
-│   │   ├── api/
-│   │   │   └── apiClient.js
-│   │   ├── context/
-│   │   │   └── AuthContext.jsx
-│   │   ├── pages/
-│   │   │   ├── LogIn.jsx
-│   │   │   ├── SignUp.jsx
-│   │   │   └── Dashboard.jsx
-│   │   ├── components/
-│   │   │   └── ProtectedRoute.jsx
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── package.json
-│   └── vite.config.js
-└── README.md
-```

@@ -435,9 +435,9 @@ class BudgetViewSet(viewsets.ModelViewSet):
         Returns:
         - Active budget details
         - Total budget income
-        - Total spent this month
+        - Total spent within budget period
         - Remaining amount
-        - Spending by category
+        - Spending by category (within budget period)
         """
         # Get active budget
         active_budget = self.get_queryset().filter(is_active=True).first()
@@ -451,14 +451,15 @@ class BudgetViewSet(viewsets.ModelViewSet):
                 'categories': []
             })
 
-        # Get current month's spending
+        # Get spending within budget period
         now = timezone.now().date()
-        start_of_month = datetime(now.year, now.month, 1).date()
+        budget_start = active_budget.start_date
+        budget_end = min(active_budget.end_date, now)  # Don't include future dates
 
         total_spent = Transaction.objects.filter(
             user=request.user,
-            transaction_date__gte=start_of_month,
-            transaction_date__lte=now
+            transaction_date__gte=budget_start,
+            transaction_date__lte=budget_end
         ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
 
         # Get spending by category
@@ -467,15 +468,15 @@ class BudgetViewSet(viewsets.ModelViewSet):
             category_spent = Transaction.objects.filter(
                 user=request.user,
                 category=category,
-                transaction_date__gte=start_of_month,
-                transaction_date__lte=now
+                transaction_date__gte=budget_start,
+                transaction_date__lte=budget_end
             ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
 
             transaction_count = Transaction.objects.filter(
                 user=request.user,
                 category=category,
-                transaction_date__gte=start_of_month,
-                transaction_date__lte=now
+                transaction_date__gte=budget_start,
+                transaction_date__lte=budget_end
             ).count()
 
             if transaction_count > 0:  # Only include categories with transactions

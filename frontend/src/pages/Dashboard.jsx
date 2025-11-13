@@ -53,13 +53,37 @@ export default function Dashboard() {
 
   const calculatePercentage = (spent, allocated) => {
     if (!allocated || allocated === 0) return 0;
-    return Math.min((spent / allocated) * 100, 100);
+    return ((spent / allocated) * 100);
   };
 
   const getStatusColor = (percentage) => {
     if (percentage >= 90) return 'bg-impulse-red';
     if (percentage >= 75) return 'bg-yellow-500';
     return 'bg-green-500';
+  };
+
+  const getCardGradient = (percentage) => {
+    if (percentage >= 90) return 'from-red-50 to-red-50';
+    if (percentage >= 75) return 'from-yellow-50 to-yellow-50';
+    return 'from-green-50 to-emerald-50';
+  };
+
+  const getCardBorder = (percentage) => {
+    if (percentage >= 90) return 'border-red-500';
+    if (percentage >= 75) return 'border-yellow-500';
+    return 'border-green-500';
+  };
+
+  const getCardTextColor = (percentage) => {
+    if (percentage >= 90) return 'text-red-700';
+    if (percentage >= 75) return 'text-yellow-700';
+    return 'text-green-700';
+  };
+
+  const getCardSubTextColor = (percentage) => {
+    if (percentage >= 90) return 'text-red-600';
+    if (percentage >= 75) return 'text-yellow-600';
+    return 'text-green-600';
   };
 
   if (loading) {
@@ -167,15 +191,33 @@ export default function Dashboard() {
         ) : (
           <>
             {/* Impulse & Savings Metrics */}
-            {dashboardMetrics && (
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div className="card bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-500">
-                  <p className="text-sm text-green-700 mb-1">Money Saved</p>
-                  <p className="text-3xl font-bold text-green-700">
-                    ${budgetSummary.remaining.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-green-600 mt-1">From resisting impulses</p>
-                </div>
+            {dashboardMetrics && (() => {
+              // Calculate Disposable Income colors once
+              const disposableIncome = budgetAllocations.find(
+                alloc => alloc.category_name === 'Disposable Income'
+              );
+
+              let disposablePercentage = 0;
+              let disposableRemaining = '0.00';
+
+              if (disposableIncome) {
+                const allocated = parseFloat(disposableIncome.allocated_amount);
+                const spent = parseFloat(disposableIncome.spent_amount);
+                disposablePercentage = calculatePercentage(spent, allocated);
+                disposableRemaining = disposableIncome.remaining_amount
+                  ? parseFloat(disposableIncome.remaining_amount).toFixed(2)
+                  : '0.00';
+              }
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                  <div className={`card bg-gradient-to-br border-2 ${getCardGradient(disposablePercentage)} ${getCardBorder(disposablePercentage)}`}>
+                    <p className={`text-sm mb-1 ${getCardTextColor(disposablePercentage)}`}>Money Saved</p>
+                    <p className={`text-3xl font-bold ${getCardTextColor(disposablePercentage)}`}>
+                      ${disposableRemaining}
+                    </p>
+                    <p className={`text-xs mt-1 ${getCardSubTextColor(disposablePercentage)}`}>Disposable income remaining</p>
+                  </div>
 
                 <div className="card bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-500">
                   <p className="text-sm text-blue-700 mb-1">Current Streak</p>
@@ -205,7 +247,8 @@ export default function Dashboard() {
                   </button>
                 </div>
               </div>
-            )}
+              );
+            })()}
 
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -295,7 +338,7 @@ export default function Dashboard() {
                         <div className="w-full bg-gray-200 rounded-full h-3">
                           <div
                             className={`h-3 rounded-full transition-all ${getStatusColor(percentage)}`}
-                            style={{ width: `${percentage}%` }}
+                            style={{ width: `${Math.min(percentage, 100)}%` }}
                           />
                         </div>
                         <p className="text-xs text-impulse-gray mt-1 text-right">
