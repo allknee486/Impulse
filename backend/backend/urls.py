@@ -23,5 +23,5 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls')),
 
     # Serve React app for all other routes
-    re_path(r'^.*$', TemplateView.as_view(template_name='index.html')),
+    path('', TemplateView.as_view(template_name='index.html')),
 ]
