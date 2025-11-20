@@ -71,45 +71,13 @@ fi
 # Extract the hostname from the URL
 TUNNEL_HOST=$(echo "$TUNNEL_URL" | sed 's|https://||' | sed 's|/.*||')
 
-# Update Django settings.py with the tunnel URL
-echo -e "${YELLOW}Updating Django ALLOWED_HOSTS and CORS settings...${NC}"
-SETTINGS_FILE="backend/backend/settings.py"
+# Export environment variables for Django to use
+export TUNNEL_URL
+export TUNNEL_HOST
 
-# Backup the original settings
-cp "$SETTINGS_FILE" "${SETTINGS_FILE}.backup"
-
-# Add tunnel host to ALLOWED_HOSTS if not already present
-if ! grep -q "TUNNEL_HOST = " "$SETTINGS_FILE"; then
-    # Add after the RENDER_EXTERNAL_HOSTNAME block
-    sed -i "/ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)/a\\
-\\
-# Cloudflare tunnel host (added by launch_tunnel.sh)\\
-TUNNEL_HOST = os.environ.get('TUNNEL_HOST', '$TUNNEL_HOST')\\
-if TUNNEL_HOST and TUNNEL_HOST not in ALLOWED_HOSTS:\\
-    ALLOWED_HOSTS.append(TUNNEL_HOST)" "$SETTINGS_FILE"
-else
-    # Update existing TUNNEL_HOST
-    sed -i "s|TUNNEL_HOST = os.environ.get('TUNNEL_HOST', '.*')|TUNNEL_HOST = os.environ.get('TUNNEL_HOST', '$TUNNEL_HOST')|" "$SETTINGS_FILE"
-fi
-
-# Add tunnel URL to CORS_ALLOWED_ORIGINS if not already present
-if ! grep -q "TUNNEL_URL = " "$SETTINGS_FILE"; then
-    # Add after the CORS_ALLOWED_ORIGINS list ends
-    # Find the closing bracket and append after it
-    sed -i '/^CORS_ALLOWED_ORIGINS = \[/,/^\]$/{
-        /^\]$/a\
-\
-# Cloudflare tunnel URL (added by launch_tunnel.sh)\
-TUNNEL_URL = os.environ.get("TUNNEL_URL", "'"$TUNNEL_URL"'")\
-if TUNNEL_URL and TUNNEL_URL not in CORS_ALLOWED_ORIGINS:\
-    CORS_ALLOWED_ORIGINS.append(TUNNEL_URL)
-    }' "$SETTINGS_FILE"
-else
-    # Update existing TUNNEL_URL
-    sed -i "s|TUNNEL_URL = os.environ.get('TUNNEL_URL', '.*')|TUNNEL_URL = os.environ.get('TUNNEL_URL', '$TUNNEL_URL')|" "$SETTINGS_FILE"
-fi
-
-echo -e "${GREEN}Django settings updated!${NC}"
+echo -e "${GREEN}Environment variables set:${NC}"
+echo -e "${BLUE}TUNNEL_URL=${TUNNEL_URL}${NC}"
+echo -e "${BLUE}TUNNEL_HOST=${TUNNEL_HOST}${NC}"
 
 # Update Vite config to accept connections from any host
 echo -e "${YELLOW}Updating Vite configuration...${NC}"
@@ -146,17 +114,12 @@ echo -e "${BLUE}Tunnel URL: ${GREEN}$TUNNEL_URL${NC}"
 echo -e "${BLUE}Frontend: ${GREEN}http://localhost:5173${NC}"
 echo -e "${BLUE}Backend: ${GREEN}http://localhost:8000${NC}"
 echo -e "${GREEN}============================================${NC}"
+echo -e "${YELLOW}Note: API requests will be proxied through the tunnel${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop all services${NC}"
 
 # Cleanup function
 cleanup() {
     echo -e "\n${YELLOW}Shutting down services...${NC}"
-
-    # Restore original settings
-    if [ -f "${SETTINGS_FILE}.backup" ]; then
-        mv "${SETTINGS_FILE}.backup" "$SETTINGS_FILE"
-        echo -e "${GREEN}Django settings restored${NC}"
-    fi
 
     # Restore original vite config
     if [ -f "${VITE_CONFIG}.backup" ]; then

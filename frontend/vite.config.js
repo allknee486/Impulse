@@ -9,5 +9,17 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     allowedHosts: [],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/ws': {
+        target: 'ws://localhost:8000',
+        ws: true,
+        changeOrigin: true,
+      },
+    },
   },
 })

@@ -7,8 +7,6 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 
-const WS_BASE_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
-
 export const useWebSocket = (url, onMessage) => {
   const wsRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
@@ -24,8 +22,16 @@ export const useWebSocket = (url, onMessage) => {
         return;
       }
 
-      // Create WebSocket URL with token as query parameter
-      const wsUrl = `${WS_BASE_URL}${url}?token=${token}`;
+      // Build WebSocket URL - use custom URL from env or construct from current location
+      let wsUrl;
+      if (import.meta.env.VITE_WS_URL) {
+        wsUrl = `${import.meta.env.VITE_WS_URL}${url}?token=${token}`;
+      } else {
+        // Use current host with ws/wss protocol based on http/https
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        wsUrl = `${protocol}//${host}${url}?token=${token}`;
+      }
 
       console.log('Connecting to WebSocket:', wsUrl);
       const ws = new WebSocket(wsUrl);

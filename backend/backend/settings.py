@@ -44,6 +44,11 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
+# Add Cloudflare tunnel host
+TUNNEL_HOST = os.environ.get('TUNNEL_HOST')
+if TUNNEL_HOST and TUNNEL_HOST not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(TUNNEL_HOST)
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -197,6 +202,11 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
+
+# Allow Cloudflare tunnel URLs (dynamically set by launch_tunnel.sh)
+TUNNEL_URL = os.environ.get('TUNNEL_URL')
+if TUNNEL_URL and TUNNEL_URL not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(TUNNEL_URL)
 
 # Once production is set up, replace with custom domain
 if not DEBUG:
