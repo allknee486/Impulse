@@ -11,7 +11,6 @@ const PREDEFINED_CATEGORIES = [
   'Entertainment',
   'Healthcare',
   'Savings',
-  'Disposable Income'
 ];
 
 export default function BudgetSetup() {
@@ -28,6 +27,10 @@ export default function BudgetSetup() {
     endDate: '',
     categories: PREDEFINED_CATEGORIES.map(name => ({ name, allocated: '' }))
   });
+
+  const totalAllocated = budgetData.categories.reduce((sum, cat) =>
+    sum + (parseFloat(cat.allocated) || 0), 0);
+  const remaining = parseFloat(budgetData.amount || 0) - totalAllocated;
 
   const handleInputChange = (field, value) => {
     setBudgetData(prev => ({ ...prev, [field]: value }));
@@ -109,6 +112,12 @@ export default function BudgetSetup() {
     setErrors({});
 
     try {
+      // Add Disposable Income to the categories array
+      const categoriesWithDisposable = [
+        ...budgetData.categories,
+        { name: 'Disposable Income', allocated: remaining.toFixed(2) }
+      ];
+
       // Create budget
       const budgetResponse = await apiClient.post('/budgets/', {
         name: budgetData.name,
@@ -121,7 +130,7 @@ export default function BudgetSetup() {
       const budgetId = budgetResponse.data.id;
 
       // Bulk create categories using the new endpoint
-      const categoriesToCreate = budgetData.categories
+      const categoriesToCreate = categoriesWithDisposable
         .filter(cat => cat.name.trim())
         .map(cat => ({ name: cat.name }));
 
@@ -134,7 +143,7 @@ export default function BudgetSetup() {
       }
 
       // Create allocations for categories that have amounts
-      const allocations = budgetData.categories
+      const allocations = categoriesWithDisposable
         .filter(cat => cat.name.trim() && cat.allocated)
         .map((cat, index) => {
           // Find the matching created category
@@ -161,9 +170,6 @@ export default function BudgetSetup() {
     }
   };
 
-  const totalAllocated = budgetData.categories.reduce((sum, cat) =>
-    sum + (parseFloat(cat.allocated) || 0), 0);
-  const remaining = parseFloat(budgetData.amount || 0) - totalAllocated;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-impulse-blue-light to-impulse-indigo-light flex items-center justify-center px-4 py-8">
@@ -270,7 +276,7 @@ export default function BudgetSetup() {
                 <span className="font-semibold">${totalAllocated.toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm mt-2">
-                <span>Remaining:</span>
+                <span>Remaining (Disposable Income):</span>
                 <span className={`font-semibold ${remaining < 0 ? 'text-impulse-red-dark' : 'text-green-600'}`}>
                   ${remaining.toFixed(2)}
                 </span>
@@ -363,8 +369,12 @@ export default function BudgetSetup() {
                   </div>
                 ))}
                 <div className="flex justify-between font-bold pt-2">
+                  <span>Disposable Income:</span>
+                  <span>${remaining.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-bold pt-2">
                   <span>Total:</span>
-                  <span>${totalAllocated.toFixed(2)}</span>
+                  <span>${(totalAllocated + remaining).toFixed(2)}</span>
                 </div>
               </div>
             </div>
